@@ -117,4 +117,21 @@ describe("useDeckStore selection state", () => {
       y: originalSubtitle.y + 1,
     });
   });
+
+  it("adds an imported image element to the current slide and selects it", () => {
+    useDeckStore.getState().addImageElement("data:image/png;base64,abc", "cover.png");
+
+    const state = useDeckStore.getState();
+    const image = state.deck.slides[0].elements.find(
+      (element) => element.id === state.selectedElementId,
+    );
+
+    expect(image).toMatchObject({
+      type: "image",
+      src: "data:image/png;base64,abc",
+      name: "cover.png",
+      objectFit: "cover",
+    });
+    expect(state.selectedElementIds).toEqual([state.selectedElementId]);
+  });
 });

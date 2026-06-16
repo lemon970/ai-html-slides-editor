@@ -94,6 +94,10 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const toggleElementSelection = useDeckStore((state) => state.toggleElementSelection);
   const clearSelection = useDeckStore((state) => state.clearSelection);
   const updateElementsById = useDeckStore((state) => state.updateElementsById);
+  const duplicateSelectedElements = useDeckStore((state) => state.duplicateSelectedElements);
+  const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
+  const toggleElementLocked = useDeckStore((state) => state.toggleElementLocked);
+  const toggleElementHidden = useDeckStore((state) => state.toggleElementHidden);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
   const [scale, setScale] = useState(1);
@@ -115,7 +119,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       ),
     [previewPatches, selectedElements],
   );
-  const canTransformSingleElement = selectedElementIds.length === 1;
+  const canTransformSingleElement = selectedElementIds.length === 1 && !selectedElement?.locked;
   const activeElementInteraction =
     interaction?.mode === "move" || interaction?.mode === "resize" || interaction?.mode === "rotate"
       ? interaction
@@ -144,6 +148,11 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     }
 
     event.stopPropagation();
+    if (event.altKey) {
+      selectNextElementAtPoint(event, element);
+      return;
+    }
+
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       toggleElementSelection(element.id);
       setPreviewPatches({});
@@ -387,6 +396,53 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     });
   }
 
+  function selectNextElementAtPoint(
+    event: PointerEvent<HTMLDivElement>,
+    currentElement: SlideElement,
+  ) {
+    const point = getCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+
+    const candidates = [...renderElements]
+      .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
+      .filter((element) => {
+        const bounds = elementBounds(element);
+        return (
+          point.x >= bounds.x &&
+          point.x <= bounds.x + bounds.w &&
+          point.y >= bounds.y &&
+          point.y <= bounds.y + bounds.h
+        );
+      });
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const currentIndex = candidates.findIndex((element) => element.id === currentElement.id);
+    const nextElement = candidates[(currentIndex + 1) % candidates.length] ?? candidates[0];
+    selectElement(nextElement.id);
+    setPreviewPatches({});
+    setInteraction(null);
+  }
+
+  function handleHideSelected() {
+    if (!selectedElementId || selectedElementIds.length !== 1) {
+      return;
+    }
+
+    toggleElementHidden(selectedElementId);
+  }
+
+  function handleToggleLockSelected() {
+    if (!selectedElementId || selectedElementIds.length !== 1) {
+      return;
+    }
+
+    toggleElementLocked(selectedElementId);
+  }
+
   return (
     <div
       ref={canvasRef}
@@ -444,6 +500,34 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             onResizePointerDown={handleResizePointerDown}
             showRotation={false}
           />
+        ) : null}
+        {mode === "editable" && previewSelectedFrame ? (
+          <div
+            className="selection-action-bar"
+            style={{
+              left: Math.max(8, previewSelectedFrame.x),
+              top: Math.max(8, previewSelectedFrame.y - 46),
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button type="button" onClick={duplicateSelectedElements}>
+              复制
+            </button>
+            <button type="button" onClick={deleteSelectedElements}>
+              删除
+            </button>
+            {selectedElementIds.length === 1 ? (
+              <>
+                <button type="button" onClick={handleToggleLockSelected}>
+                  {selectedElement?.locked ? "解锁" : "锁定"}
+                </button>
+                <button type="button" onClick={handleHideSelected}>
+                  隐藏
+                </button>
+              </>
+            ) : null}
+            <span>Alt+点击选择下层</span>
+          </div>
         ) : null}
         {mode === "editable" && interaction?.mode === "marquee" ? (
           <div

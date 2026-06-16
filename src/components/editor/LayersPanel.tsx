@@ -12,14 +12,14 @@ function elementLabel(element: SlideElement) {
 
   if (element.type === "text") {
     const text = element.content.trim().replace(/\s+/g, " ");
-    return text ? text.slice(0, 28) : "Text";
+    return text ? text.slice(0, 28) : "文本";
   }
 
   if (element.type === "shape") {
-    return element.shape === "ellipse" ? "Ellipse" : "Rectangle";
+    return element.shape === "ellipse" ? "椭圆" : "矩形";
   }
 
-  return element.type === "image" ? "Image" : "HTML";
+  return element.type === "image" ? "图片" : "HTML";
 }
 
 function elementTypeLabel(element: SlideElement) {
@@ -54,8 +54,8 @@ export function LayersPanel() {
   }
 
   return (
-    <section className="layers-panel" aria-label="Layers">
-      <div className="panel-heading">Layers</div>
+    <section className="layers-panel" aria-label="图层">
+      <div className="panel-heading">图层</div>
       {layers.length === 0 ? (
         <div className="empty-state">当前页面没有元素。</div>
       ) : (
@@ -78,6 +78,9 @@ export function LayersPanel() {
                   <span className="layer-type">{elementTypeLabel(element)}</span>
                   <span className="layer-name">{elementLabel(element)}</span>
                   {element.groupId ? <span className="layer-group">{element.groupId}</span> : null}
+                  <span className="layer-state">
+                    {element.locked ? "已锁定" : "可编辑"} / {element.hidden ? "已隐藏" : "可见"}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -86,7 +89,7 @@ export function LayersPanel() {
                   title={element.locked ? "解锁" : "锁定"}
                   onClick={() => toggleElementLocked(element.id)}
                 >
-                  {element.locked ? "锁" : "开"}
+                  {element.locked ? "解锁" : "锁定"}
                 </button>
                 <button
                   type="button"
@@ -95,7 +98,7 @@ export function LayersPanel() {
                   title={element.hidden ? "显示" : "隐藏"}
                   onClick={() => toggleElementHidden(element.id)}
                 >
-                  {element.hidden ? "隐" : "显"}
+                  {element.hidden ? "显示" : "隐藏"}
                 </button>
               </div>
             );

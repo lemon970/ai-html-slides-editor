@@ -31,6 +31,12 @@ export function PropertyPanel() {
     max: Math.max(...zValues, 0),
   };
   const [isTextOverflowing, setIsTextOverflowing] = useState(false);
+  const elementTypeLabel = {
+    text: "文本",
+    image: "图片",
+    shape: "形状",
+    html: "HTML",
+  } as const;
 
   useEffect(() => {
     if (!element || element.type !== "text") {
@@ -65,8 +71,8 @@ export function PropertyPanel() {
   }
 
   return (
-    <aside className="property-panel" aria-label="Properties">
-      <div className="panel-heading">Properties</div>
+    <aside className="property-panel" aria-label="属性">
+      <div className="panel-heading">属性</div>
       {!element ? (
         <div className="property-stack">
           <div className="empty-state">
@@ -82,7 +88,7 @@ export function PropertyPanel() {
       ) : (
         <div className="property-stack">
           <div className="property-meta">
-            <span>{element.type}</span>
+            <span>{elementTypeLabel[element.type]}</span>
             <code>{element.id}</code>
           </div>
 

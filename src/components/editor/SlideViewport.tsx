@@ -9,7 +9,7 @@ export function SlideViewport() {
   const slide = deck.slides.find((item) => item.id === currentSlideId) ?? deck.slides[0];
 
   return (
-    <section className="slide-viewport" aria-label="Current slide">
+    <section className="slide-viewport" aria-label="当前幻灯片">
       <div className="viewport-stage">
         <SlideCanvas slide={slide} deckSize={deck.size} mode="editable" />
       </div>

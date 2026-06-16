@@ -50,6 +50,14 @@ export function TextSection({
           ))}
         </select>
       </Field>
+      <Field label="本机字体名">
+        <input
+          type="text"
+          value={element.style.fontFamily ?? ""}
+          placeholder="例如：霞鹜文楷、HarmonyOS Sans SC"
+          onChange={(event) => onStyleChange({ fontFamily: event.target.value })}
+        />
+      </Field>
       <div className="field-grid-2">
         <Field label="字号">
           <input

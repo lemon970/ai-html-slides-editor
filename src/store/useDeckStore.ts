@@ -57,6 +57,7 @@ type DeckStore = {
   pasteElements: () => void;
   duplicateSelectedElements: () => void;
   nudgeSelectedElements: (delta: { x: number; y: number }) => void;
+  addImageElement: (src: string, name?: string) => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
@@ -262,6 +263,52 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     set({
       deck: nextDeck,
       history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
+  addImageElement: (src, name) => {
+    const state = get();
+    const slide = getSlide(state.deck, state.currentSlideId);
+    if (!slide) {
+      return;
+    }
+
+    const id = `image-${nanoid(8)}`;
+    const maxZIndex = Math.max(...slide.elements.map((element) => element.zIndex ?? 0), 0);
+    const imageElement: SlideElement = {
+      id,
+      name: name || "导入图片",
+      type: "image",
+      src,
+      alt: name || "",
+      objectFit: "cover",
+      x: Math.round((state.deck.size.width - 420) / 2),
+      y: Math.round((state.deck.size.height - 260) / 2),
+      w: 420,
+      h: 260,
+      zIndex: maxZIndex + 1,
+      style: {
+        borderRadius: 0,
+      },
+    };
+
+    const nextDeck: Deck = {
+      ...state.deck,
+      slides: state.deck.slides.map((item) =>
+        item.id === state.currentSlideId
+          ? {
+              ...item,
+              elements: [...item.elements, imageElement],
+            }
+          : item,
+      ),
+    };
+
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementId: id,
+      selectedElementIds: [id],
       error: null,
     });
   },

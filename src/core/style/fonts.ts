@@ -1,16 +1,25 @@
 export const fontFamilies = [
   "Inter, system-ui, sans-serif",
   "Arial, Helvetica, sans-serif",
+  "'Helvetica Neue', Arial, sans-serif",
   "Georgia, serif",
   "'Times New Roman', Times, serif",
   "'Courier New', Courier, monospace",
   "'Microsoft YaHei', sans-serif",
+  "'Microsoft JhengHei', sans-serif",
   "'PingFang SC', sans-serif",
+  "'Hiragino Sans GB', sans-serif",
+  "'Noto Sans CJK SC', sans-serif",
+  "'Source Han Sans SC', sans-serif",
+  "'SimHei', sans-serif",
+  "'SimSun', serif",
+  "'KaiTi', serif",
+  "'FangSong', serif",
 ];
 
 export const fontWeights = [
-  { label: "Normal", value: "normal" },
-  { label: "Bold", value: "bold" },
+  { label: "常规", value: "normal" },
+  { label: "加粗", value: "bold" },
   { label: "100", value: "100" },
   { label: "200", value: "200" },
   { label: "300", value: "300" },

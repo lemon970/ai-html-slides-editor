@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useRef } from "react";
+import { fileToDataUrl, imageAccept } from "@/core/assets/imageDataUrl";
 import { downloadHtml } from "@/core/export/downloadHtml";
 import { downloadJson } from "@/core/export/downloadJson";
 import { parseConstrainedHtml } from "@/core/import/parseConstrainedHtml";
@@ -9,6 +10,7 @@ import { useDeckStore } from "@/store/useDeckStore";
 
 export function Toolbar() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const deck = useDeckStore((state) => state.deck);
   const currentSlideId = useDeckStore((state) => state.currentSlideId);
   const selectedElementIds = useDeckStore((state) => state.selectedElementIds);
@@ -19,6 +21,7 @@ export function Toolbar() {
   const ungroupSelectedElements = useDeckStore((state) => state.ungroupSelectedElements);
   const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
   const duplicateSelectedElements = useDeckStore((state) => state.duplicateSelectedElements);
+  const addImageElement = useDeckStore((state) => state.addImageElement);
   const setError = useDeckStore((state) => state.setError);
   const canUndo = useDeckStore((state) => state.history.past.length > 0);
   const canRedo = useDeckStore((state) => state.history.future.length > 0);
@@ -42,8 +45,22 @@ export function Toolbar() {
     }
   }
 
+  async function handleImageImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    try {
+      addImageElement(await fileToDataUrl(file), file.name);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "导入图片失败。");
+    }
+  }
+
   return (
-    <div className="toolbar" aria-label="Editor actions">
+    <div className="toolbar" aria-label="编辑操作">
       <button type="button" onClick={undo} disabled={!canUndo}>
         撤销
       </button>
@@ -79,6 +96,9 @@ export function Toolbar() {
       <button type="button" onClick={() => inputRef.current?.click()}>
         导入 HTML
       </button>
+      <button type="button" onClick={() => imageInputRef.current?.click()}>
+        导入图片
+      </button>
       <button type="button" onClick={() => downloadJson(deck)}>
         保存 JSON
       </button>
@@ -89,8 +109,19 @@ export function Toolbar() {
         ref={inputRef}
         type="file"
         accept=".html,text/html"
+        aria-label="选择 HTML 文件"
+        tabIndex={-1}
         className="visually-hidden"
         onChange={handleImport}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept={imageAccept}
+        aria-label="选择图片文件"
+        tabIndex={-1}
+        className="visually-hidden"
+        onChange={handleImageImport}
       />
     </div>
   );

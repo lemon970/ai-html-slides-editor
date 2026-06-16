@@ -9,8 +9,8 @@ export function SlideNavigator() {
   const selectSlide = useDeckStore((state) => state.selectSlide);
 
   return (
-    <aside className="slide-navigator" aria-label="Slides">
-      <div className="panel-heading">Slides</div>
+    <aside className="slide-navigator" aria-label="幻灯片">
+      <div className="panel-heading">幻灯片</div>
       <div className="slide-list">
         {deck.slides.map((slide, index) => (
           <button

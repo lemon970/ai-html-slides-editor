@@ -11,7 +11,7 @@ export function RotationHandle({ onPointerDown }: RotationHandleProps) {
     <button
       type="button"
       className="rotation-handle"
-      aria-label="Rotate element"
+      aria-label="旋转元素"
       onPointerDown={onPointerDown}
     />
   );
