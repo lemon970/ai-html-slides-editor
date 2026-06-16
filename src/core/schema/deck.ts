@@ -10,17 +10,42 @@ export const fillSchema = z.object({
   color: z.string().min(1),
 });
 
+export const gradientFillSchema = z.object({
+  type: z.literal("gradient"),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  angle: z.number(),
+});
+
+export const imageFillSchema = z.object({
+  type: z.literal("image"),
+  src: z.string(),
+  fit: z.enum(["cover", "contain", "fill"]).default("cover"),
+  position: z.enum(["center", "top", "bottom", "left", "right"]).default("center"),
+  overlay: z.string().optional(),
+});
+
+export const slideBackgroundSchema = z.discriminatedUnion("type", [
+  fillSchema,
+  gradientFillSchema,
+  imageFillSchema,
+]);
+
 export const textStyleSchema = z.object({
   fontFamily: z.string().optional(),
   fontSize: z.number().positive().optional(),
   fontWeight: z.union([z.number(), z.literal("bold"), z.literal("normal")]).optional(),
+  fontStyle: z.enum(["normal", "italic"]).optional(),
   color: z.string().optional(),
   lineHeight: z.number().positive().optional(),
-  textAlign: z.enum(["left", "center", "right"]).optional(),
+  letterSpacing: z.number().optional(),
+  textAlign: z.enum(["left", "center", "right", "justify"]).optional(),
+  verticalAlign: z.enum(["top", "middle", "bottom"]).optional(),
   background: z.string().optional(),
   padding: z.number().min(0).optional(),
   borderRadius: z.number().min(0).optional(),
   shadow: z.string().optional(),
+  overflow: z.enum(["visible", "hidden", "fit"]).optional(),
 });
 
 export const shapeStyleSchema = z.object({
@@ -41,6 +66,8 @@ const baseElementSchema = z.object({
   opacity: z.number().min(0).max(1).optional(),
   locked: z.boolean().optional(),
   zIndex: z.number().optional(),
+  minW: z.number().positive().optional(),
+  minH: z.number().positive().optional(),
 });
 
 export const textElementSchema = baseElementSchema.extend({
@@ -86,7 +113,7 @@ export const slideElementSchema = z.discriminatedUnion("type", [
 export const slideSchema = z.object({
   id: z.string().min(1),
   name: z.string().optional(),
-  background: fillSchema,
+  background: slideBackgroundSchema,
   elements: z.array(slideElementSchema),
   notes: z.string().optional(),
 });
@@ -107,6 +134,7 @@ export const deckSchema = z.object({
 
 export type Deck = z.infer<typeof deckSchema>;
 export type Slide = z.infer<typeof slideSchema>;
+export type SlideBackground = z.infer<typeof slideBackgroundSchema>;
 export type SlideElement = z.infer<typeof slideElementSchema>;
 export type TextElement = z.infer<typeof textElementSchema>;
 export type ImageElement = z.infer<typeof imageElementSchema>;

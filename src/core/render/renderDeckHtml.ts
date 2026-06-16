@@ -1,5 +1,6 @@
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements } from "@/core/ops/deckOperations";
+import { slideBackgroundHtmlStyle, textHtmlStyle } from "@/core/style/css";
 
 function escapeHtml(value: string) {
   return value
@@ -35,22 +36,7 @@ function renderElement(element: SlideElement) {
   const dataAttrs = `data-element data-element-id="${escapeHtml(element.id)}" data-type="${element.type}"`;
 
   if (element.type === "text") {
-    const style = styleToString({
-      ...baseElementStyle(element),
-      "font-family": element.style.fontFamily,
-      "font-size": element.style.fontSize ? `${element.style.fontSize}px` : undefined,
-      "font-weight": element.style.fontWeight,
-      color: element.style.color,
-      "line-height": element.style.lineHeight,
-      "text-align": element.style.textAlign,
-      background: element.style.background,
-      padding: element.style.padding ? `${element.style.padding}px` : undefined,
-      "border-radius": element.style.borderRadius
-        ? `${element.style.borderRadius}px`
-        : undefined,
-      "box-shadow": element.style.shadow,
-      "white-space": "pre-wrap",
-    });
+    const style = styleToString(textHtmlStyle(element));
 
     return `<div ${dataAttrs} style="${style}">${escapeHtml(element.content)}</div>`;
   }
@@ -94,7 +80,7 @@ function renderElement(element: SlideElement) {
 
 function renderSlide(slide: Slide, index: number) {
   const elements = sortElements(slide.elements).map(renderElement).join("\n");
-  return `<section class="slide" data-slide id="${escapeHtml(slide.id)}" data-slide-index="${index}" style="background:${escapeHtml(slide.background.color)};">${elements}</section>`;
+  return `<section class="slide" data-slide id="${escapeHtml(slide.id)}" data-slide-index="${index}" style="${styleToString(slideBackgroundHtmlStyle(slide.background))}">${elements}</section>`;
 }
 
 export function renderDeckHtml(deck: Deck) {

@@ -1,5 +1,5 @@
 import { validateDeck } from "@/core/schema/validators";
-import type { Deck, SlideElement } from "@/core/schema/deck";
+import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
 
 function readNumber(style: CSSStyleDeclaration, property: string, fallback = 0) {
   const value = style.getPropertyValue(property);
@@ -23,6 +23,48 @@ function readFontWeight(value: string) {
 
   const numeric = Number.parseInt(value, 10);
   return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function readBackground(node: HTMLElement): SlideBackground {
+  const style = node.style;
+  const backgroundImage = style.backgroundImage;
+
+  if (backgroundImage.includes("url(")) {
+    const urlMatch = backgroundImage.match(/url\(["']?(.+?)["']?\)/);
+    return {
+      type: "image",
+      src: urlMatch?.[1] ?? "",
+      fit:
+        style.backgroundSize === "contain" || style.backgroundSize === "100% 100%"
+          ? style.backgroundSize === "100% 100%"
+            ? "fill"
+            : "contain"
+          : "cover",
+      position: style.backgroundPosition.includes("top")
+        ? "top"
+        : style.backgroundPosition.includes("bottom")
+          ? "bottom"
+          : style.backgroundPosition.includes("left")
+            ? "left"
+            : style.backgroundPosition.includes("right")
+              ? "right"
+              : "center",
+    };
+  }
+
+  if (style.background.includes("gradient")) {
+    return {
+      type: "gradient",
+      from: "#ffffff",
+      to: "#dbeafe",
+      angle: 135,
+    };
+  }
+
+  return {
+    type: "solid",
+    color: style.background || "#ffffff",
+  };
 }
 
 function elementFromNode(node: HTMLElement): SlideElement {
@@ -52,13 +94,22 @@ function elementFromNode(node: HTMLElement): SlideElement {
         fontFamily: style.fontFamily || undefined,
         fontSize: readNumber(style, "font-size", 24),
         fontWeight: readFontWeight(style.fontWeight),
+        fontStyle: style.fontStyle === "italic" ? "italic" : undefined,
         color: style.color || undefined,
         lineHeight: Number.parseFloat(style.lineHeight) || undefined,
+        letterSpacing: readNumber(style, "letter-spacing"),
         textAlign: (style.textAlign as "left" | "center" | "right") || undefined,
+        verticalAlign:
+          style.justifyContent === "center"
+            ? "middle"
+            : style.justifyContent === "flex-end"
+              ? "bottom"
+              : "top",
         background: style.background || undefined,
         padding: readNumber(style, "padding"),
         borderRadius: readNumber(style, "border-radius"),
         shadow: style.boxShadow || undefined,
+        overflow: style.overflow === "visible" ? "visible" : "hidden",
       },
     };
   }
@@ -136,8 +187,7 @@ export function parseConstrainedHtml(html: string): Deck {
       id: slideNode.id || `slide-${index + 1}`,
       name: slideNode.getAttribute("aria-label") || `Slide ${index + 1}`,
       background: {
-        type: "solid",
-        color: slideNode.style.background || "#ffffff",
+        ...readBackground(slideNode),
       },
       elements: [...slideNode.querySelectorAll<HTMLElement>("[data-element]")].map(
         elementFromNode,

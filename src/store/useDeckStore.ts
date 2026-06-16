@@ -2,8 +2,9 @@
 
 import { create } from "zustand";
 import { demoDeck } from "@/data/demoDeck";
-import type { Deck, SlideElement } from "@/core/schema/deck";
+import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
 import { getElement, getSlide, replaceDeck, updateElement } from "@/core/ops/deckOperations";
+import { updateSlideBackground } from "@/core/ops/slideOperations";
 import type { DeckHistory } from "@/core/ops/history";
 import { pushHistory, redoHistory, undoHistory } from "@/core/ops/history";
 
@@ -21,6 +22,7 @@ type DeckStore = {
   selectElement: (elementId: string | null) => void;
   updateSelectedElement: (patch: ElementPatch) => void;
   updateElementById: (slideId: string, elementId: string, patch: ElementPatch) => void;
+  updateCurrentSlideBackground: (background: SlideBackground) => void;
   loadDeck: (deck: Deck) => void;
   undo: () => void;
   redo: () => void;
@@ -61,6 +63,15 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     }
 
     const nextDeck = updateElement(state.deck, slideId, elementId, patch);
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
+  updateCurrentSlideBackground: (background) => {
+    const state = get();
+    const nextDeck = updateSlideBackground(state.deck, state.currentSlideId, background);
     set({
       deck: nextDeck,
       history: pushHistory(state.history, state.deck),

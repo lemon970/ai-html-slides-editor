@@ -25,4 +25,27 @@ describe("renderDeckHtml", () => {
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script>alert(1)</script></div>");
   });
+
+  it("exports image backgrounds and detailed text styles", () => {
+    const deck = structuredClone(demoDeck);
+    deck.slides[0].background = {
+      type: "image",
+      src: "data:image/png;base64,abc",
+      fit: "cover",
+      position: "center",
+    };
+    const element = deck.slides[0].elements.find((item) => item.id === "cover-title");
+    if (element?.type !== "text") {
+      throw new Error("Expected cover title text element.");
+    }
+    element.style.fontStyle = "italic";
+    element.style.letterSpacing = 1.5;
+    element.style.verticalAlign = "middle";
+
+    const html = renderDeckHtml(deck);
+    expect(html).toContain("background-image:url");
+    expect(html).toContain("font-style:italic");
+    expect(html).toContain("letter-spacing:1.5px");
+    expect(html).toContain("justify-content:center");
+  });
 });

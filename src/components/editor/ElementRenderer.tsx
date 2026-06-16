@@ -2,6 +2,7 @@
 
 import type { CSSProperties, PointerEvent } from "react";
 import type { SlideElement } from "@/core/schema/deck";
+import { elementBaseReactStyle, textReactStyle } from "@/core/style/css";
 
 type ElementRendererProps = {
   element: SlideElement;
@@ -11,17 +12,7 @@ type ElementRendererProps = {
 };
 
 function baseStyle(element: SlideElement): CSSProperties {
-  return {
-    position: "absolute",
-    left: element.x,
-    top: element.y,
-    width: element.w,
-    height: element.h,
-    opacity: element.opacity ?? 1,
-    zIndex: element.zIndex ?? 0,
-    transform: `rotate(${element.rotation ?? 0}deg)`,
-    transformOrigin: "center center",
-  };
+  return elementBaseReactStyle(element);
 }
 
 export function ElementRenderer({
@@ -45,20 +36,7 @@ export function ElementRenderer({
     return (
       <div
         {...commonProps}
-        style={{
-          ...baseStyle(element),
-          fontFamily: element.style.fontFamily,
-          fontSize: element.style.fontSize,
-          fontWeight: element.style.fontWeight,
-          color: element.style.color,
-          lineHeight: element.style.lineHeight,
-          textAlign: element.style.textAlign,
-          background: element.style.background,
-          padding: element.style.padding,
-          borderRadius: element.style.borderRadius,
-          boxShadow: element.style.shadow,
-          whiteSpace: "pre-wrap",
-        }}
+        style={textReactStyle(element)}
       >
         {element.content}
       </div>
