@@ -48,4 +48,18 @@ describe("renderDeckHtml", () => {
     expect(html).toContain("letter-spacing:1.5px");
     expect(html).toContain("justify-content:center");
   });
+
+  it("does not export hidden elements", () => {
+    const deck = structuredClone(demoDeck);
+    const element = deck.slides[0].elements.find((item) => item.id === "cover-title");
+    if (!element) {
+      throw new Error("Expected cover title element.");
+    }
+    element.hidden = true;
+
+    const html = renderDeckHtml(deck);
+
+    expect(html).not.toContain('data-element-id="cover-title"');
+    expect(html).toContain('"hidden":true');
+  });
 });

@@ -58,6 +58,7 @@ export const shapeStyleSchema = z.object({
 
 const baseElementSchema = z.object({
   id: z.string().min(1),
+  name: z.string().optional(),
   x: z.number(),
   y: z.number(),
   w: z.number().positive(),
@@ -65,6 +66,7 @@ const baseElementSchema = z.object({
   rotation: z.number().optional(),
   opacity: z.number().min(0).max(1).optional(),
   locked: z.boolean().optional(),
+  hidden: z.boolean().optional(),
   groupId: z.string().optional(),
   zIndex: z.number().optional(),
   minW: z.number().positive().optional(),

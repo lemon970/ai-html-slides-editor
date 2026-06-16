@@ -1,12 +1,16 @@
 "use client";
 
 import { create } from "zustand";
+import { nanoid } from "nanoid";
 import { demoDeck } from "@/data/demoDeck";
 import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
 import {
+  deleteElements,
+  duplicateElements,
   getElement,
   getSlide,
   groupElements,
+  nudgeElements,
   replaceDeck,
   ungroupElements,
   updateElement,
@@ -32,6 +36,7 @@ type DeckStore = {
   currentSlideId: string;
   selectedElementId: string | null;
   selectedElementIds: string[];
+  clipboardElementIds: string[];
   history: DeckHistory;
   error: string | null;
   selectSlide: (slideId: string) => void;
@@ -45,6 +50,13 @@ type DeckStore = {
     slideId: string,
     patchesByElementId: Record<string, ElementPatch>,
   ) => void;
+  toggleElementLocked: (elementId: string) => void;
+  toggleElementHidden: (elementId: string) => void;
+  deleteSelectedElements: () => void;
+  copySelectedElements: () => void;
+  pasteElements: () => void;
+  duplicateSelectedElements: () => void;
+  nudgeSelectedElements: (delta: { x: number; y: number }) => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
@@ -59,6 +71,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   currentSlideId: demoDeck.slides[0].id,
   selectedElementId: null,
   selectedElementIds: [],
+  clipboardElementIds: [],
   history: { past: [], future: [] },
   error: null,
   selectSlide: (slideId) => {
@@ -137,6 +150,121 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       error: null,
     });
   },
+  toggleElementLocked: (elementId) => {
+    const state = get();
+    const element = getElement(state.deck, state.currentSlideId, elementId);
+    if (!element) {
+      return;
+    }
+
+    const nextDeck = updateElement(state.deck, state.currentSlideId, elementId, {
+      locked: !element.locked,
+    });
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
+  toggleElementHidden: (elementId) => {
+    const state = get();
+    const element = getElement(state.deck, state.currentSlideId, elementId);
+    if (!element) {
+      return;
+    }
+
+    const nextDeck = updateElement(state.deck, state.currentSlideId, elementId, {
+      hidden: !element.hidden,
+    });
+    const selectedElementIds = element.hidden
+      ? state.selectedElementIds
+      : state.selectedElementIds.filter((id) => id !== elementId);
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementIds,
+      selectedElementId: primarySelectedId(selectedElementIds),
+      error: null,
+    });
+  },
+  deleteSelectedElements: () => {
+    const state = get();
+    if (state.selectedElementIds.length === 0) {
+      return;
+    }
+
+    const nextDeck = deleteElements(state.deck, state.currentSlideId, state.selectedElementIds);
+    if (nextDeck === state.deck) {
+      return;
+    }
+
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementId: null,
+      selectedElementIds: [],
+      error: null,
+    });
+  },
+  copySelectedElements: () => {
+    const state = get();
+    const slide = getSlide(state.deck, state.currentSlideId);
+    if (!slide || state.selectedElementIds.length === 0) {
+      return;
+    }
+
+    const copyableIds = state.selectedElementIds.filter((id) => {
+      const element = slide.elements.find((item) => item.id === id);
+      return element && !element.locked;
+    });
+
+    set({ clipboardElementIds: copyableIds });
+  },
+  pasteElements: () => {
+    const state = get();
+    if (state.clipboardElementIds.length === 0) {
+      return;
+    }
+
+    const result = duplicateElements(state.deck, state.currentSlideId, state.clipboardElementIds, {
+      idFactory: () => `el-${nanoid(8)}`,
+      groupIdFactory: () => `group-${nanoid(8)}`,
+      offset: { x: 24, y: 24 },
+    });
+    if (result.duplicatedElementIds.length === 0) {
+      return;
+    }
+
+    set({
+      deck: result.deck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementIds: result.duplicatedElementIds,
+      selectedElementId: primarySelectedId(result.duplicatedElementIds),
+      clipboardElementIds: result.duplicatedElementIds,
+      error: null,
+    });
+  },
+  duplicateSelectedElements: () => {
+    get().copySelectedElements();
+    get().pasteElements();
+  },
+  nudgeSelectedElements: (delta) => {
+    const state = get();
+    if (state.selectedElementIds.length === 0) {
+      return;
+    }
+
+    const nextDeck = nudgeElements(state.deck, state.currentSlideId, state.selectedElementIds, delta);
+    if (nextDeck === state.deck) {
+      return;
+    }
+
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
   groupSelectedElements: () => {
     const state = get();
     if (state.selectedElementIds.length < 2) {
@@ -194,6 +322,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       currentSlideId: deck.slides[0]?.id ?? "",
       selectedElementId: null,
       selectedElementIds: [],
+      clipboardElementIds: [],
       history: { past: [], future: [] },
       error: null,
     }),

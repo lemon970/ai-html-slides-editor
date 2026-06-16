@@ -1,5 +1,5 @@
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
-import { sortElements } from "@/core/ops/deckOperations";
+import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { slideBackgroundHtmlStyle, textHtmlStyle } from "@/core/style/css";
 
 function escapeHtml(value: string) {
@@ -79,7 +79,7 @@ function renderElement(element: SlideElement) {
 }
 
 function renderSlide(slide: Slide, index: number) {
-  const elements = sortElements(slide.elements).map(renderElement).join("\n");
+  const elements = sortElements(visibleElements(slide.elements)).map(renderElement).join("\n");
   return `<section class="slide" data-slide id="${escapeHtml(slide.id)}" data-slide-index="${index}" style="${styleToString(slideBackgroundHtmlStyle(slide.background))}">${elements}</section>`;
 }
 
