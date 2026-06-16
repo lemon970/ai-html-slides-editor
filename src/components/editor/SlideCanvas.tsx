@@ -4,7 +4,7 @@ import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ElementRenderer } from "./ElementRenderer";
 import { TransformBox } from "./controls/TransformBox";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
-import { sortElements } from "@/core/ops/deckOperations";
+import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { boundsFromElements, elementBounds, type Bounds } from "@/core/geometry/bounds";
 import {
   moveBounds,
@@ -98,12 +98,14 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
   const [scale, setScale] = useState(1);
   const elements = useMemo(() => sortElements(slide.elements), [slide.elements]);
+  const renderElements = useMemo(() => visibleElements(elements), [elements]);
   const selectedElement = selectedElementId
     ? elements.find((element) => element.id === selectedElementId)
     : null;
+  const selectedElementVisible = Boolean(selectedElement && !selectedElement.hidden);
   const selectedElements = useMemo(
-    () => elements.filter((element) => selectedElementIds.includes(element.id)),
-    [elements, selectedElementIds],
+    () => renderElements.filter((element) => selectedElementIds.includes(element.id)),
+    [renderElements, selectedElementIds],
   );
   const selectedFrame = useMemo(() => boundsFromElements(selectedElements), [selectedElements]);
   const previewSelectedFrame = useMemo(
@@ -324,7 +326,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
 
   function commitInteraction() {
     if (interaction?.mode === "marquee") {
-      selectElements(elementIdsInMarquee(elements, interaction.currentBounds));
+      selectElements(elementIdsInMarquee(renderElements, interaction.currentBounds));
       setInteraction(null);
       setPreviewPatches({});
       return;
@@ -406,7 +408,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           transform: `scale(${scale})`,
         }}
       >
-        {elements.map((element) => {
+        {renderElements.map((element) => {
           const isInteracting = activeElementInteraction?.elementId === element.id;
           const adjustedElement =
             mode === "editable" && (isInteracting || previewPatches[element.id])
@@ -423,7 +425,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             />
           );
         })}
-        {mode === "editable" && selectedElement && canTransformSingleElement ? (
+        {mode === "editable" && selectedElement && selectedElementVisible && canTransformSingleElement ? (
           <TransformBox
             element={
               activeElementInteraction?.elementId === selectedElement.id

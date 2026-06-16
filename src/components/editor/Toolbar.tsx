@@ -17,6 +17,8 @@ export function Toolbar() {
   const redo = useDeckStore((state) => state.redo);
   const groupSelectedElements = useDeckStore((state) => state.groupSelectedElements);
   const ungroupSelectedElements = useDeckStore((state) => state.ungroupSelectedElements);
+  const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
+  const duplicateSelectedElements = useDeckStore((state) => state.duplicateSelectedElements);
   const setError = useDeckStore((state) => state.setError);
   const canUndo = useDeckStore((state) => state.history.past.length > 0);
   const canRedo = useDeckStore((state) => state.history.future.length > 0);
@@ -58,6 +60,20 @@ export function Toolbar() {
       </button>
       <button type="button" onClick={ungroupSelectedElements} disabled={!activeGroupId}>
         取消组合
+      </button>
+      <button
+        type="button"
+        onClick={duplicateSelectedElements}
+        disabled={selectedElementIds.length === 0}
+      >
+        复制
+      </button>
+      <button
+        type="button"
+        onClick={deleteSelectedElements}
+        disabled={selectedElementIds.length === 0}
+      >
+        删除
       </button>
       <span className="toolbar-divider" />
       <button type="button" onClick={() => inputRef.current?.click()}>
