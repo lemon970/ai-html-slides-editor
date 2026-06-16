@@ -35,3 +35,6 @@ pnpm dev
 
 - `docs/ai-html-slides-editor-research.md`：技术调研和产品拆解。
 - `docs/mvp-implementation-roadmap.md`：从 0 到 MVP 的实现路径。
+- `docs/refinement-system-roadmap.md`：第二阶段精细化编辑系统计划。
+- `docs/next-iteration-intelligent-expansion.md`：本地优先、个人可部署工具路线。
+- `docs/practical-usability-iteration-plan.md`：下一轮实用性与易用性增强计划。
