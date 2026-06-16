@@ -13,6 +13,7 @@ import {
   scaleBoundsWithinFrame,
   type ResizeHandle,
 } from "@/core/geometry/transform";
+import { elementIdsForGroup, shouldSelectWholeGroup } from "@/core/selection/groupOperations";
 import { elementIdsInMarquee } from "@/core/selection/selectionOperations";
 import { slideBackgroundReactStyle } from "@/core/style/css";
 import { useDeckStore } from "@/store/useDeckStore";
@@ -151,6 +152,20 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     event.currentTarget.setPointerCapture(event.pointerId);
     if (selectedElementIds.length > 1 && selectedElementIds.includes(element.id)) {
       startMultiMove(event);
+      return;
+    }
+
+    if (shouldSelectWholeGroup(element) && element.groupId) {
+      const groupElementIds = elementIdsForGroup(elements, element.groupId);
+      const groupElements = elements.filter((item) => groupElementIds.includes(item.id));
+      selectElements(groupElementIds);
+      setPreviewPatches({});
+      setInteraction({
+        mode: "multi-move",
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startBoundsById: selectedBoundsById(groupElements),
+      });
       return;
     }
 

@@ -65,6 +65,7 @@ const baseElementSchema = z.object({
   rotation: z.number().optional(),
   opacity: z.number().min(0).max(1).optional(),
   locked: z.boolean().optional(),
+  groupId: z.string().optional(),
   zIndex: z.number().optional(),
   minW: z.number().positive().optional(),
   minH: z.number().positive().optional(),

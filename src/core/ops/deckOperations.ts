@@ -82,6 +82,41 @@ export function updateElements(
   };
 }
 
+export function groupElements(
+  deck: Deck,
+  slideId: string,
+  elementIds: string[],
+  groupId: string,
+): Deck {
+  const ids = new Set(elementIds);
+  if (ids.size < 2) {
+    return deck;
+  }
+
+  return updateElements(
+    deck,
+    slideId,
+    Object.fromEntries([...ids].map((elementId) => [elementId, { groupId }])),
+  );
+}
+
+export function ungroupElements(deck: Deck, slideId: string, groupId: string): Deck {
+  const slide = getSlide(deck, slideId);
+  if (!slide) {
+    return deck;
+  }
+
+  return updateElements(
+    deck,
+    slideId,
+    Object.fromEntries(
+      slide.elements
+        .filter((element) => element.groupId === groupId)
+        .map((element) => [element.id, { groupId: undefined }]),
+    ),
+  );
+}
+
 export function replaceDeck(deck: Deck): Deck {
   return {
     ...deck,

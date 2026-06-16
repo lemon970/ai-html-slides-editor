@@ -6,10 +6,13 @@ import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
 import {
   getElement,
   getSlide,
+  groupElements,
   replaceDeck,
+  ungroupElements,
   updateElement,
   updateElements,
 } from "@/core/ops/deckOperations";
+import { selectedGroupId } from "@/core/selection/groupOperations";
 import { updateSlideBackground } from "@/core/ops/slideOperations";
 import type { DeckHistory } from "@/core/ops/history";
 import { pushHistory, redoHistory, undoHistory } from "@/core/ops/history";
@@ -42,6 +45,8 @@ type DeckStore = {
     slideId: string,
     patchesByElementId: Record<string, ElementPatch>,
   ) => void;
+  groupSelectedElements: () => void;
+  ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
   loadDeck: (deck: Deck) => void;
   undo: () => void;
@@ -129,6 +134,48 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     set({
       deck: nextDeck,
       history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
+  groupSelectedElements: () => {
+    const state = get();
+    if (state.selectedElementIds.length < 2) {
+      return;
+    }
+
+    const groupId = `group-${Date.now().toString(36)}`;
+    const nextDeck = groupElements(
+      state.deck,
+      state.currentSlideId,
+      state.selectedElementIds,
+      groupId,
+    );
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementIds: state.selectedElementIds,
+      selectedElementId: state.selectedElementId,
+      error: null,
+    });
+  },
+  ungroupSelectedElements: () => {
+    const state = get();
+    const slide = getSlide(state.deck, state.currentSlideId);
+    if (!slide) {
+      return;
+    }
+
+    const groupId = selectedGroupId(slide.elements, state.selectedElementIds);
+    if (!groupId) {
+      return;
+    }
+
+    const nextDeck = ungroupElements(state.deck, state.currentSlideId, groupId);
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      selectedElementIds: state.selectedElementIds,
+      selectedElementId: state.selectedElementId,
       error: null,
     });
   },

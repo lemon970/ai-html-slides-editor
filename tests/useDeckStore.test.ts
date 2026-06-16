@@ -29,4 +29,28 @@ describe("useDeckStore selection state", () => {
     expect(useDeckStore.getState().selectedElementId).toBe("cover-subtitle");
     expect(useDeckStore.getState().selectedElementIds).toEqual(["cover-subtitle"]);
   });
+
+  it("groups and ungroups the selected elements", () => {
+    useDeckStore.getState().selectElements(["cover-title", "cover-subtitle"]);
+    useDeckStore.getState().groupSelectedElements();
+
+    const groupedDeck = useDeckStore.getState().deck;
+    const groupedTitle = groupedDeck.slides[0].elements.find((element) => element.id === "cover-title");
+    const groupedSubtitle = groupedDeck.slides[0].elements.find(
+      (element) => element.id === "cover-subtitle",
+    );
+
+    expect(groupedTitle?.groupId).toBeTruthy();
+    expect(groupedSubtitle?.groupId).toBe(groupedTitle?.groupId);
+
+    useDeckStore.getState().ungroupSelectedElements();
+    const ungroupedDeck = useDeckStore.getState().deck;
+    expect(
+      ungroupedDeck.slides[0].elements.find((element) => element.id === "cover-title")?.groupId,
+    ).toBeUndefined();
+    expect(
+      ungroupedDeck.slides[0].elements.find((element) => element.id === "cover-subtitle")
+        ?.groupId,
+    ).toBeUndefined();
+  });
 });

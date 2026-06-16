@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { demoDeck } from "@/data/demoDeck";
-import { getElement, updateElement, updateElements } from "@/core/ops/deckOperations";
+import {
+  getElement,
+  groupElements,
+  ungroupElements,
+  updateElement,
+  updateElements,
+} from "@/core/ops/deckOperations";
 
 describe("deck operations", () => {
   it("updates one element without mutating other slides", () => {
@@ -30,5 +36,18 @@ describe("deck operations", () => {
     expect(getElement(nextDeck, "slide-1", "cover-title")).toMatchObject({ x: 120, y: 140 });
     expect(getElement(nextDeck, "slide-1", "cover-subtitle")).toMatchObject({ x: 130, y: 260 });
     expect(demoDeck.slides[1]).toBe(nextDeck.slides[1]);
+  });
+
+  it("groups and ungroups elements with a flat group id", () => {
+    const grouped = groupElements(demoDeck, "slide-1", ["cover-title", "cover-subtitle"], "group-1");
+
+    expect(getElement(grouped, "slide-1", "cover-title")).toMatchObject({ groupId: "group-1" });
+    expect(getElement(grouped, "slide-1", "cover-subtitle")).toMatchObject({
+      groupId: "group-1",
+    });
+
+    const ungrouped = ungroupElements(grouped, "slide-1", "group-1");
+    expect(getElement(ungrouped, "slide-1", "cover-title")?.groupId).toBeUndefined();
+    expect(getElement(ungrouped, "slide-1", "cover-subtitle")?.groupId).toBeUndefined();
   });
 });
