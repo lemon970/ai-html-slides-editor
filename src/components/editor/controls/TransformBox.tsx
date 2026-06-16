@@ -1,7 +1,7 @@
 "use client";
 
 import type { PointerEvent } from "react";
-import type { SlideElement } from "@/core/schema/deck";
+import type { Bounds } from "@/core/geometry/bounds";
 import type { ResizeHandle as ResizeHandleName } from "@/core/geometry/transform";
 import { ResizeHandle } from "./ResizeHandle";
 import { RotationHandle } from "./RotationHandle";
@@ -9,10 +9,11 @@ import { RotationHandle } from "./RotationHandle";
 const handles: ResizeHandleName[] = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
 
 type TransformBoxProps = {
-  element: SlideElement;
+  element: Bounds & { rotation?: number; zIndex?: number };
   onMovePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onResizePointerDown: (event: PointerEvent<HTMLButtonElement>, handle: ResizeHandleName) => void;
-  onRotatePointerDown: (event: PointerEvent<HTMLButtonElement>) => void;
+  onRotatePointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
+  showRotation?: boolean;
 };
 
 export function TransformBox({
@@ -20,6 +21,7 @@ export function TransformBox({
   onMovePointerDown,
   onResizePointerDown,
   onRotatePointerDown,
+  showRotation = true,
 }: TransformBoxProps) {
   return (
     <div
@@ -37,7 +39,9 @@ export function TransformBox({
       {handles.map((handle) => (
         <ResizeHandle key={handle} handle={handle} onPointerDown={onResizePointerDown} />
       ))}
-      <RotationHandle onPointerDown={onRotatePointerDown} />
+      {showRotation && onRotatePointerDown ? (
+        <RotationHandle onPointerDown={onRotatePointerDown} />
+      ) : null}
     </div>
   );
 }

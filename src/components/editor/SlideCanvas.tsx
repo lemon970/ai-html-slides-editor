@@ -5,11 +5,12 @@ import { ElementRenderer } from "./ElementRenderer";
 import { TransformBox } from "./controls/TransformBox";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements } from "@/core/ops/deckOperations";
-import { elementBounds, type Bounds } from "@/core/geometry/bounds";
+import { boundsFromElements, elementBounds, type Bounds } from "@/core/geometry/bounds";
 import {
   moveBounds,
   resizeBounds,
   rotationFromPointer,
+  scaleBoundsWithinFrame,
   type ResizeHandle,
 } from "@/core/geometry/transform";
 import { elementIdsInMarquee } from "@/core/selection/selectionOperations";
@@ -47,15 +48,39 @@ type RotateState = {
   center: { x: number; y: number };
 };
 
+type MultiMoveState = {
+  mode: "multi-move";
+  startClientX: number;
+  startClientY: number;
+  startBoundsById: Record<string, Bounds>;
+};
+
+type MultiResizeState = {
+  mode: "multi-resize";
+  handle: ResizeHandle;
+  startClientX: number;
+  startClientY: number;
+  startFrame: Bounds;
+  startBoundsById: Record<string, Bounds>;
+};
+
 type MarqueeState = {
   mode: "marquee";
   startPoint: { x: number; y: number };
   currentBounds: Bounds;
 };
 
-type InteractionState = DragState | ResizeState | RotateState | MarqueeState;
+type InteractionState =
+  | DragState
+  | ResizeState
+  | RotateState
+  | MultiMoveState
+  | MultiResizeState
+  | MarqueeState;
 
-function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | null) {
+type PreviewPatches = Record<string, Partial<SlideElement>>;
+
+function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | undefined) {
   return patch ? ({ ...element, ...patch } as SlideElement) : element;
 }
 
@@ -67,16 +92,31 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const selectElements = useDeckStore((state) => state.selectElements);
   const toggleElementSelection = useDeckStore((state) => state.toggleElementSelection);
   const clearSelection = useDeckStore((state) => state.clearSelection);
-  const updateElementById = useDeckStore((state) => state.updateElementById);
+  const updateElementsById = useDeckStore((state) => state.updateElementsById);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
-  const [previewPatch, setPreviewPatch] = useState<Partial<SlideElement> | null>(null);
+  const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
   const [scale, setScale] = useState(1);
   const elements = useMemo(() => sortElements(slide.elements), [slide.elements]);
   const selectedElement = selectedElementId
     ? elements.find((element) => element.id === selectedElementId)
     : null;
+  const selectedElements = useMemo(
+    () => elements.filter((element) => selectedElementIds.includes(element.id)),
+    [elements, selectedElementIds],
+  );
+  const selectedFrame = useMemo(() => boundsFromElements(selectedElements), [selectedElements]);
+  const previewSelectedFrame = useMemo(
+    () =>
+      boundsFromElements(
+        selectedElements.map((element) => withPreviewPatch(element, previewPatches[element.id])),
+      ),
+    [previewPatches, selectedElements],
+  );
   const canTransformSingleElement = selectedElementIds.length === 1;
-  const activeElementInteraction = interaction?.mode !== "marquee" ? interaction : null;
+  const activeElementInteraction =
+    interaction?.mode === "move" || interaction?.mode === "resize" || interaction?.mode === "rotate"
+      ? interaction
+      : null;
 
   useEffect(() => {
     const node = canvasRef.current;
@@ -103,14 +143,19 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     event.stopPropagation();
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       toggleElementSelection(element.id);
-      setPreviewPatch(null);
+      setPreviewPatches({});
       setInteraction(null);
       return;
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (selectedElementIds.length > 1 && selectedElementIds.includes(element.id)) {
+      startMultiMove(event);
+      return;
+    }
+
     selectElement(element.id);
-    setPreviewPatch(null);
+    setPreviewPatches({});
     setInteraction({
       mode: "move",
       elementId: element.id,
@@ -130,6 +175,19 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
 
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (selectedFrame && selectedElementIds.length > 1) {
+      setInteraction({
+        mode: "multi-resize",
+        handle,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startFrame: selectedFrame,
+        startBoundsById: selectedBoundsById(selectedElements),
+      });
+      setPreviewPatches({});
+      return;
+    }
+
     setInteraction({
       mode: "resize",
       elementId: selectedElement.id,
@@ -140,7 +198,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       minW: selectedElement.minW ?? 48,
       minH: selectedElement.minH ?? (selectedElement.type === "text" ? 36 : 48),
     });
-    setPreviewPatch(null);
+    setPreviewPatches({});
   }
 
   function handleRotatePointerDown(event: PointerEvent<HTMLButtonElement>) {
@@ -158,7 +216,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         y: selectedElement.y + selectedElement.h / 2,
       },
     });
-    setPreviewPatch(null);
+    setPreviewPatches({});
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -184,7 +242,23 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         x: (event.clientX - interaction.startClientX) / scale,
         y: (event.clientY - interaction.startClientY) / scale,
       });
-      setPreviewPatch(next);
+      setPreviewPatches({ [interaction.elementId]: next });
+      return;
+    }
+
+    if (interaction.mode === "multi-move") {
+      const delta = {
+        x: (event.clientX - interaction.startClientX) / scale,
+        y: (event.clientY - interaction.startClientY) / scale,
+      };
+      setPreviewPatches(
+        Object.fromEntries(
+          Object.entries(interaction.startBoundsById).map(([elementId, bounds]) => [
+            elementId,
+            moveBounds(bounds, delta),
+          ]),
+        ),
+      );
       return;
     }
 
@@ -198,7 +272,23 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         },
         { w: interaction.minW, h: interaction.minH },
       );
-      setPreviewPatch(next);
+      setPreviewPatches({ [interaction.elementId]: next });
+      return;
+    }
+
+    if (interaction.mode === "multi-resize") {
+      const nextFrame = resizeBounds(interaction.startFrame, interaction.handle, {
+        x: (event.clientX - interaction.startClientX) / scale,
+        y: (event.clientY - interaction.startClientY) / scale,
+      });
+      setPreviewPatches(
+        Object.fromEntries(
+          Object.entries(interaction.startBoundsById).map(([elementId, bounds]) => [
+            elementId,
+            scaleBoundsWithinFrame(bounds, interaction.startFrame, nextFrame),
+          ]),
+        ),
+      );
       return;
     }
 
@@ -207,11 +297,13 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       return;
     }
 
-    setPreviewPatch({
-      rotation: rotationFromPointer(interaction.center, {
-        x: (event.clientX - rect.left) / scale,
-        y: (event.clientY - rect.top) / scale,
-      }),
+    setPreviewPatches({
+      [interaction.elementId]: {
+        rotation: rotationFromPointer(interaction.center, {
+          x: (event.clientX - rect.left) / scale,
+          y: (event.clientY - rect.top) / scale,
+        }),
+      },
     });
   }
 
@@ -219,19 +311,19 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     if (interaction?.mode === "marquee") {
       selectElements(elementIdsInMarquee(elements, interaction.currentBounds));
       setInteraction(null);
-      setPreviewPatch(null);
+      setPreviewPatches({});
       return;
     }
 
-    if (!interaction || !previewPatch) {
+    if (!interaction || Object.keys(previewPatches).length === 0) {
       setInteraction(null);
-      setPreviewPatch(null);
+      setPreviewPatches({});
       return;
     }
 
-    updateElementById(slide.id, interaction.elementId, previewPatch);
+    updateElementsById(slide.id, previewPatches);
     setInteraction(null);
-    setPreviewPatch(null);
+    setPreviewPatches({});
   }
 
   function getCanvasPoint(event: PointerEvent<HTMLDivElement>) {
@@ -258,11 +350,23 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
-    setPreviewPatch(null);
+    setPreviewPatches({});
     setInteraction({
       mode: "marquee",
       startPoint,
       currentBounds: { ...startPoint, w: 0, h: 0 },
+    });
+  }
+
+  function startMultiMove(event: PointerEvent<HTMLElement>) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPreviewPatches({});
+    setInteraction({
+      mode: "multi-move",
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startBoundsById: selectedBoundsById(selectedElements),
     });
   }
 
@@ -290,7 +394,9 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         {elements.map((element) => {
           const isInteracting = activeElementInteraction?.elementId === element.id;
           const adjustedElement =
-            isInteracting && mode === "editable" ? withPreviewPatch(element, previewPatch) : element;
+            mode === "editable" && (isInteracting || previewPatches[element.id])
+              ? withPreviewPatch(element, previewPatches[element.id])
+              : element;
 
           return (
             <ElementRenderer
@@ -306,12 +412,20 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           <TransformBox
             element={
               activeElementInteraction?.elementId === selectedElement.id
-                ? withPreviewPatch(selectedElement, previewPatch)
+                ? withPreviewPatch(selectedElement, previewPatches[selectedElement.id])
                 : selectedElement
             }
             onMovePointerDown={(event) => handleElementPointerDown(event, selectedElement)}
             onResizePointerDown={handleResizePointerDown}
             onRotatePointerDown={handleRotatePointerDown}
+          />
+        ) : null}
+        {mode === "editable" && selectedElementIds.length > 1 && previewSelectedFrame ? (
+          <TransformBox
+            element={previewSelectedFrame}
+            onMovePointerDown={startMultiMove}
+            onResizePointerDown={handleResizePointerDown}
+            showRotation={false}
           />
         ) : null}
         {mode === "editable" && interaction?.mode === "marquee" ? (
@@ -328,6 +442,10 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       </div>
     </div>
   );
+}
+
+function selectedBoundsById(elements: SlideElement[]) {
+  return Object.fromEntries(elements.map((element) => [element.id, elementBounds(element)]));
 }
 
 function normalizeMarqueeBounds(

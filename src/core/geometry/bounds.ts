@@ -16,6 +16,24 @@ export function elementBounds(element: SlideElement): Bounds {
   };
 }
 
+export function boundsFromElements(elements: SlideElement[]): Bounds | null {
+  if (elements.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...elements.map((element) => element.x));
+  const top = Math.min(...elements.map((element) => element.y));
+  const right = Math.max(...elements.map((element) => element.x + element.w));
+  const bottom = Math.max(...elements.map((element) => element.y + element.h));
+
+  return {
+    x: left,
+    y: top,
+    w: right - left,
+    h: bottom - top,
+  };
+}
+
 export function clampSize(bounds: Bounds, minW = 24, minH = 24): Bounds {
   return {
     ...bounds,

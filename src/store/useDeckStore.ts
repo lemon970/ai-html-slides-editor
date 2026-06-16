@@ -3,7 +3,13 @@
 import { create } from "zustand";
 import { demoDeck } from "@/data/demoDeck";
 import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
-import { getElement, getSlide, replaceDeck, updateElement } from "@/core/ops/deckOperations";
+import {
+  getElement,
+  getSlide,
+  replaceDeck,
+  updateElement,
+  updateElements,
+} from "@/core/ops/deckOperations";
 import { updateSlideBackground } from "@/core/ops/slideOperations";
 import type { DeckHistory } from "@/core/ops/history";
 import { pushHistory, redoHistory, undoHistory } from "@/core/ops/history";
@@ -32,6 +38,10 @@ type DeckStore = {
   clearSelection: () => void;
   updateSelectedElement: (patch: ElementPatch) => void;
   updateElementById: (slideId: string, elementId: string, patch: ElementPatch) => void;
+  updateElementsById: (
+    slideId: string,
+    patchesByElementId: Record<string, ElementPatch>,
+  ) => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
   loadDeck: (deck: Deck) => void;
   undo: () => void;
@@ -96,6 +106,26 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     }
 
     const nextDeck = updateElement(state.deck, slideId, elementId, patch);
+    set({
+      deck: nextDeck,
+      history: pushHistory(state.history, state.deck),
+      error: null,
+    });
+  },
+  updateElementsById: (slideId, patchesByElementId) => {
+    const state = get();
+    const unlockedPatches = Object.fromEntries(
+      Object.entries(patchesByElementId).filter(([elementId]) => {
+        const element = getElement(state.deck, slideId, elementId);
+        return element && !element.locked;
+      }),
+    );
+
+    if (Object.keys(unlockedPatches).length === 0) {
+      return;
+    }
+
+    const nextDeck = updateElements(state.deck, slideId, unlockedPatches);
     set({
       deck: nextDeck,
       history: pushHistory(state.history, state.deck),

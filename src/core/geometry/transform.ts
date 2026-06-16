@@ -78,3 +78,19 @@ export function rotationFromPointer(
   const radians = Math.atan2(pointer.y - center.y, pointer.x - center.x);
   return Math.round((radians * 180) / Math.PI + 90);
 }
+
+export function scaleBoundsWithinFrame(
+  start: Bounds,
+  startFrame: Bounds,
+  nextFrame: Bounds,
+): Bounds {
+  const scaleX = startFrame.w === 0 ? 1 : nextFrame.w / startFrame.w;
+  const scaleY = startFrame.h === 0 ? 1 : nextFrame.h / startFrame.h;
+
+  return {
+    x: Math.round(nextFrame.x + (start.x - startFrame.x) * scaleX),
+    y: Math.round(nextFrame.y + (start.y - startFrame.y) * scaleY),
+    w: Math.max(1, Math.round(start.w * scaleX)),
+    h: Math.max(1, Math.round(start.h * scaleY)),
+  };
+}

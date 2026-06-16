@@ -53,6 +53,35 @@ export function updateElement(
   };
 }
 
+export function updateElements(
+  deck: Deck,
+  slideId: string,
+  patchesByElementId: Record<string, ElementPatch>,
+): Deck {
+  const patchIds = new Set(Object.keys(patchesByElementId));
+  if (patchIds.size === 0) {
+    return deck;
+  }
+
+  return {
+    ...deck,
+    slides: deck.slides.map((slide) => {
+      if (slide.id !== slideId) {
+        return slide;
+      }
+
+      return {
+        ...slide,
+        elements: slide.elements.map((element) =>
+          patchIds.has(element.id) && !element.locked
+            ? mergeElement(element, patchesByElementId[element.id])
+            : element,
+        ),
+      };
+    }),
+  };
+}
+
 export function replaceDeck(deck: Deck): Deck {
   return {
     ...deck,
