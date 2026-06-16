@@ -7,6 +7,12 @@ import { getElement, getSlide, replaceDeck, updateElement } from "@/core/ops/dec
 import { updateSlideBackground } from "@/core/ops/slideOperations";
 import type { DeckHistory } from "@/core/ops/history";
 import { pushHistory, redoHistory, undoHistory } from "@/core/ops/history";
+import {
+  normalizeSelection,
+  primarySelectedId,
+  selectOnly,
+  toggleSelection,
+} from "@/core/selection/selectionOperations";
 
 type ElementPatch = Partial<SlideElement> & {
   style?: Record<string, unknown>;
@@ -16,10 +22,14 @@ type DeckStore = {
   deck: Deck;
   currentSlideId: string;
   selectedElementId: string | null;
+  selectedElementIds: string[];
   history: DeckHistory;
   error: string | null;
   selectSlide: (slideId: string) => void;
   selectElement: (elementId: string | null) => void;
+  selectElements: (elementIds: string[]) => void;
+  toggleElementSelection: (elementId: string) => void;
+  clearSelection: () => void;
   updateSelectedElement: (patch: ElementPatch) => void;
   updateElementById: (slideId: string, elementId: string, patch: ElementPatch) => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
@@ -33,6 +43,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   deck: demoDeck,
   currentSlideId: demoDeck.slides[0].id,
   selectedElementId: null,
+  selectedElementIds: [],
   history: { past: [], future: [] },
   error: null,
   selectSlide: (slideId) => {
@@ -44,10 +55,32 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     set({
       currentSlideId: slideId,
       selectedElementId: null,
+      selectedElementIds: [],
       error: null,
     });
   },
-  selectElement: (elementId) => set({ selectedElementId: elementId }),
+  selectElement: (elementId) => {
+    const selectedElementIds = selectOnly(elementId);
+    set({
+      selectedElementId: primarySelectedId(selectedElementIds),
+      selectedElementIds,
+    });
+  },
+  selectElements: (elementIds) => {
+    const selectedElementIds = normalizeSelection(elementIds);
+    set({
+      selectedElementId: primarySelectedId(selectedElementIds),
+      selectedElementIds,
+    });
+  },
+  toggleElementSelection: (elementId) => {
+    const selectedElementIds = toggleSelection(get().selectedElementIds, elementId);
+    set({
+      selectedElementId: primarySelectedId(selectedElementIds),
+      selectedElementIds,
+    });
+  },
+  clearSelection: () => set({ selectedElementId: null, selectedElementIds: [] }),
   updateSelectedElement: (patch) => {
     const { currentSlideId, selectedElementId } = get();
     if (!selectedElementId) {
@@ -83,6 +116,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       deck: replaceDeck(deck),
       currentSlideId: deck.slides[0]?.id ?? "",
       selectedElementId: null,
+      selectedElementIds: [],
       history: { past: [], future: [] },
       error: null,
     }),
@@ -96,6 +130,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       deck: result.deck,
       history: result.history,
       selectedElementId: null,
+      selectedElementIds: [],
     });
   },
   redo: () => {
@@ -108,6 +143,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       deck: result.deck,
       history: result.history,
       selectedElementId: null,
+      selectedElementIds: [],
     });
   },
   setError: (error) => set({ error }),

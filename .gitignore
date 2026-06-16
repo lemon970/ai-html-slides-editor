@@ -13,5 +13,7 @@ dist/
 exports/
 downloaded/
 .playwright-mcp/
+.codegraph/
+.cursor/
 .next-dev.log
 .next-dev.err.log

@@ -15,11 +15,15 @@ export function PropertyPanel() {
   const deck = useDeckStore((state) => state.deck);
   const currentSlideId = useDeckStore((state) => state.currentSlideId);
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
+  const selectedElementIds = useDeckStore((state) => state.selectedElementIds);
   const updateSelectedElement = useDeckStore((state) => state.updateSelectedElement);
   const updateCurrentSlideBackground = useDeckStore(
     (state) => state.updateCurrentSlideBackground,
   );
-  const element = selectedElementId ? getElement(deck, currentSlideId, selectedElementId) : null;
+  const element =
+    selectedElementIds.length === 1 && selectedElementId
+      ? getElement(deck, currentSlideId, selectedElementId)
+      : null;
   const slide = deck.slides.find((item) => item.id === currentSlideId) ?? deck.slides[0];
   const zValues = slide.elements.map((item) => item.zIndex ?? 0);
   const zRange = {
@@ -65,7 +69,11 @@ export function PropertyPanel() {
       <div className="panel-heading">Properties</div>
       {!element ? (
         <div className="property-stack">
-          <div className="empty-state">未选择元素，正在编辑当前页面。</div>
+          <div className="empty-state">
+            {selectedElementIds.length > 1
+              ? `已选择 ${selectedElementIds.length} 个元素。多元素属性编辑将在后续步骤接入。`
+              : "未选择元素，正在编辑当前页面。"}
+          </div>
           <BackgroundSection
             background={slide.background}
             onChange={updateCurrentSlideBackground}

@@ -218,6 +218,14 @@
   transform-origin: center center;
 }
 
+.selection-marquee {
+  position: absolute;
+  z-index: 5000;
+  border: 2px solid #0f766e;
+  background: rgba(15, 118, 110, 0.12);
+  pointer-events: none;
+}
+
 .resize-handle,
 .rotation-handle {
   position: absolute;

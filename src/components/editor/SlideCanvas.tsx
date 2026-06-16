@@ -5,13 +5,14 @@ import { ElementRenderer } from "./ElementRenderer";
 import { TransformBox } from "./controls/TransformBox";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements } from "@/core/ops/deckOperations";
-import { elementBounds } from "@/core/geometry/bounds";
+import { elementBounds, type Bounds } from "@/core/geometry/bounds";
 import {
   moveBounds,
   resizeBounds,
   rotationFromPointer,
   type ResizeHandle,
 } from "@/core/geometry/transform";
+import { elementIdsInMarquee } from "@/core/selection/selectionOperations";
 import { slideBackgroundReactStyle } from "@/core/style/css";
 import { useDeckStore } from "@/store/useDeckStore";
 
@@ -46,7 +47,13 @@ type RotateState = {
   center: { x: number; y: number };
 };
 
-type InteractionState = DragState | ResizeState | RotateState;
+type MarqueeState = {
+  mode: "marquee";
+  startPoint: { x: number; y: number };
+  currentBounds: Bounds;
+};
+
+type InteractionState = DragState | ResizeState | RotateState | MarqueeState;
 
 function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | null) {
   return patch ? ({ ...element, ...patch } as SlideElement) : element;
@@ -55,7 +62,11 @@ function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | 
 export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
+  const selectedElementIds = useDeckStore((state) => state.selectedElementIds);
   const selectElement = useDeckStore((state) => state.selectElement);
+  const selectElements = useDeckStore((state) => state.selectElements);
+  const toggleElementSelection = useDeckStore((state) => state.toggleElementSelection);
+  const clearSelection = useDeckStore((state) => state.clearSelection);
   const updateElementById = useDeckStore((state) => state.updateElementById);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatch, setPreviewPatch] = useState<Partial<SlideElement> | null>(null);
@@ -64,6 +75,8 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const selectedElement = selectedElementId
     ? elements.find((element) => element.id === selectedElementId)
     : null;
+  const canTransformSingleElement = selectedElementIds.length === 1;
+  const activeElementInteraction = interaction?.mode !== "marquee" ? interaction : null;
 
   useEffect(() => {
     const node = canvasRef.current;
@@ -88,6 +101,13 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     }
 
     event.stopPropagation();
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      toggleElementSelection(element.id);
+      setPreviewPatch(null);
+      setInteraction(null);
+      return;
+    }
+
     event.currentTarget.setPointerCapture(event.pointerId);
     selectElement(element.id);
     setPreviewPatch(null);
@@ -146,6 +166,19 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       return;
     }
 
+    if (interaction.mode === "marquee") {
+      const currentPoint = getCanvasPoint(event);
+      if (!currentPoint) {
+        return;
+      }
+
+      setInteraction({
+        ...interaction,
+        currentBounds: normalizeMarqueeBounds(interaction.startPoint, currentPoint),
+      });
+      return;
+    }
+
     if (interaction.mode === "move") {
       const next = moveBounds(interaction.startBounds, {
         x: (event.clientX - interaction.startClientX) / scale,
@@ -183,6 +216,13 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   }
 
   function commitInteraction() {
+    if (interaction?.mode === "marquee") {
+      selectElements(elementIdsInMarquee(elements, interaction.currentBounds));
+      setInteraction(null);
+      setPreviewPatch(null);
+      return;
+    }
+
     if (!interaction || !previewPatch) {
       setInteraction(null);
       setPreviewPatch(null);
@@ -194,6 +234,38 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     setPreviewPatch(null);
   }
 
+  function getCanvasPoint(event: PointerEvent<HTMLDivElement>) {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return null;
+    }
+
+    return {
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
+    };
+  }
+
+  function handleCanvasPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (mode !== "editable" || event.button !== 0) {
+      return;
+    }
+
+    const startPoint = getCanvasPoint(event);
+    if (!startPoint) {
+      clearSelection();
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPreviewPatch(null);
+    setInteraction({
+      mode: "marquee",
+      startPoint,
+      currentBounds: { ...startPoint, w: 0, h: 0 },
+    });
+  }
+
   return (
     <div
       ref={canvasRef}
@@ -202,11 +274,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         aspectRatio: `${deckSize.width} / ${deckSize.height}`,
         ...slideBackgroundReactStyle(slide.background),
       }}
-      onPointerDown={() => {
-        if (mode === "editable") {
-          selectElement(null);
-        }
-      }}
+      onPointerDown={handleCanvasPointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={commitInteraction}
       onPointerCancel={commitInteraction}
@@ -220,7 +288,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         }}
       >
         {elements.map((element) => {
-          const isInteracting = interaction?.elementId === element.id;
+          const isInteracting = activeElementInteraction?.elementId === element.id;
           const adjustedElement =
             isInteracting && mode === "editable" ? withPreviewPatch(element, previewPatch) : element;
 
@@ -229,15 +297,15 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
               key={element.id}
               element={adjustedElement}
               mode={mode}
-              selected={mode === "editable" && selectedElementId === element.id}
+              selected={mode === "editable" && selectedElementIds.includes(element.id)}
               onPointerDown={handleElementPointerDown}
             />
           );
         })}
-        {mode === "editable" && selectedElement ? (
+        {mode === "editable" && selectedElement && canTransformSingleElement ? (
           <TransformBox
             element={
-              interaction?.elementId === selectedElement.id
+              activeElementInteraction?.elementId === selectedElement.id
                 ? withPreviewPatch(selectedElement, previewPatch)
                 : selectedElement
             }
@@ -246,7 +314,32 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             onRotatePointerDown={handleRotatePointerDown}
           />
         ) : null}
+        {mode === "editable" && interaction?.mode === "marquee" ? (
+          <div
+            className="selection-marquee"
+            style={{
+              left: interaction.currentBounds.x,
+              top: interaction.currentBounds.y,
+              width: interaction.currentBounds.w,
+              height: interaction.currentBounds.h,
+            }}
+          />
+        ) : null}
       </div>
     </div>
   );
+}
+
+function normalizeMarqueeBounds(
+  startPoint: { x: number; y: number },
+  currentPoint: { x: number; y: number },
+): Bounds {
+  const x = Math.min(startPoint.x, currentPoint.x);
+  const y = Math.min(startPoint.y, currentPoint.y);
+  return {
+    x,
+    y,
+    w: Math.abs(currentPoint.x - startPoint.x),
+    h: Math.abs(currentPoint.y - startPoint.y),
+  };
 }
