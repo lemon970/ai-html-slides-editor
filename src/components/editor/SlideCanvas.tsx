@@ -9,6 +9,7 @@ import type { EditorCommand } from "@/core/commands/editorCommands";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { boundsFromElements, elementBounds, type Bounds } from "@/core/geometry/bounds";
+import { snapPosition, type SnapGuide } from "@/core/geometry/snap";
 import {
   moveBounds,
   resizeBounds,
@@ -20,11 +21,13 @@ import { elementIdsForGroup, shouldSelectWholeGroup } from "@/core/selection/gro
 import { elementIdsInMarquee } from "@/core/selection/selectionOperations";
 import { slideBackgroundReactStyle } from "@/core/style/css";
 import { useDeckStore } from "@/store/useDeckStore";
+import { CodeEditModal } from "./CodeEditModal";
 
 type SlideCanvasProps = {
   slide: Slide;
   deckSize: Deck["size"];
   mode: "editable" | "thumbnail";
+  showGrid?: boolean;
 };
 
 type DragState = {
@@ -88,7 +91,7 @@ function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | 
   return patch ? ({ ...element, ...patch } as SlideElement) : element;
 }
 
-export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
+export function SlideCanvas({ slide, deckSize, mode, showGrid = false }: SlideCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
@@ -110,6 +113,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const toggleElementHidden = useDeckStore((state) => state.toggleElementHidden);
   const updateElementById = useDeckStore((state) => state.updateElementById);
   const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [editingCodeElement, setEditingCodeElement] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
   const [contextMenu, setContextMenu] = useState<{
@@ -118,6 +122,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     items: ContextMenuItem[];
   } | null>(null);
   const [scale, setScale] = useState(1);
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const elements = useMemo(() => sortElements(slide.elements), [slide.elements]);
   const renderElements = useMemo(() => visibleElements(elements), [elements]);
   const selectedElement = selectedElementId
@@ -169,11 +174,15 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   }
 
   function handleElementDoubleClick(element: SlideElement) {
-    if (element.locked || element.type !== "text") return;
+    if (element.locked) return;
     selectElement(element.id);
     setInteraction(null);
     setPreviewPatches({});
-    setEditingElementId(element.id);
+    if (element.type === "text") {
+      setEditingElementId(element.id);
+    } else if (element.type === "html" && element.codeConfig) {
+      setEditingCodeElement(element.id);
+    }
   }
 
   function handleElementPointerDown(event: PointerEvent<HTMLDivElement>, element: SlideElement) {
@@ -359,11 +368,16 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     }
 
     if (interaction.mode === "move") {
-      const next = moveBounds(interaction.startBounds, {
+      const raw = moveBounds(interaction.startBounds, {
         x: (event.clientX - interaction.startClientX) / scale,
         y: (event.clientY - interaction.startClientY) / scale,
       });
-      setPreviewPatches({ [interaction.elementId]: next });
+      const otherBounds = renderElements
+        .filter((e) => e.id !== interaction.elementId)
+        .map(elementBounds);
+      const snapped = snapPosition(raw, otherBounds, deckSize, 6, showGrid ? 16 : null);
+      setSnapGuides(snapped.guides);
+      setPreviewPatches({ [interaction.elementId]: { ...raw, x: snapped.x, y: snapped.y } });
       return;
     }
 
@@ -372,12 +386,24 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         x: (event.clientX - interaction.startClientX) / scale,
         y: (event.clientY - interaction.startClientY) / scale,
       };
+      const patches = Object.fromEntries(
+        Object.entries(interaction.startBoundsById).map(([id, bounds]) => [id, moveBounds(bounds, delta)]),
+      );
+      const movedArr = Object.values(patches);
+      const gx = Math.min(...movedArr.map((b) => b.x));
+      const gy = Math.min(...movedArr.map((b) => b.y));
+      const gw = Math.max(...movedArr.map((b) => b.x + b.w)) - gx;
+      const gh = Math.max(...movedArr.map((b) => b.y + b.h)) - gy;
+      const otherBounds = renderElements
+        .filter((e) => !selectedElementIds.includes(e.id))
+        .map(elementBounds);
+      const snapped = snapPosition({ x: gx, y: gy, w: gw, h: gh }, otherBounds, deckSize, 6, showGrid ? 16 : null);
+      const sdx = snapped.x - gx;
+      const sdy = snapped.y - gy;
+      setSnapGuides(snapped.guides);
       setPreviewPatches(
         Object.fromEntries(
-          Object.entries(interaction.startBoundsById).map(([elementId, bounds]) => [
-            elementId,
-            moveBounds(bounds, delta),
-          ]),
+          Object.entries(patches).map(([id, b]) => [id, { ...b, x: b.x + sdx, y: b.y + sdy }]),
         ),
       );
       return;
@@ -434,18 +460,21 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       selectElements(elementIdsInMarquee(renderElements, interaction.currentBounds));
       setInteraction(null);
       setPreviewPatches({});
+      setSnapGuides([]);
       return;
     }
 
     if (!interaction || Object.keys(previewPatches).length === 0) {
       setInteraction(null);
       setPreviewPatches({});
+      setSnapGuides([]);
       return;
     }
 
     updateElementsById(slide.id, previewPatches);
     setInteraction(null);
     setPreviewPatches({});
+    setSnapGuides([]);
   }
 
   function getCanvasPoint(event: PointerEvent<HTMLDivElement>) {
@@ -624,6 +653,23 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             />
           ) : null;
         })() : null}
+        {mode === "editable" && editingCodeElement ? (() => {
+          const el = elements.find((e) => e.id === editingCodeElement);
+          return el && el.type === "html" && el.codeConfig ? (
+            <CodeEditModal
+              code={el.html}
+              language={el.codeConfig.language}
+              onSave={(code, language) => {
+                updateElementById(slide.id, editingCodeElement, {
+                  html: code,
+                  codeConfig: { ...el.codeConfig!, language },
+                });
+                setEditingCodeElement(null);
+              }}
+              onClose={() => setEditingCodeElement(null)}
+            />
+          ) : null;
+        })() : null}
         {mode === "editable" && selectedElement && selectedElementVisible && canTransformSingleElement ? (
           <TransformBox
             element={
@@ -683,6 +729,14 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             }}
           />
         ) : null}
+        {mode === "editable" && showGrid && (
+          <div className="canvas-grid" style={{ width: deckSize.width, height: deckSize.height }} />
+        )}
+        {mode === "editable" && snapGuides.map((g, i) =>
+          g.axis === "x"
+            ? <div key={`sg-x-${i}`} className="snap-guide snap-guide-x" style={{ left: g.position, height: deckSize.height }} />
+            : <div key={`sg-y-${i}`} className="snap-guide snap-guide-y" style={{ top: g.position, width: deckSize.width }} />,
+        )}
       </div>
       {mode === "editable" && contextMenu ? (
         <ContextMenu

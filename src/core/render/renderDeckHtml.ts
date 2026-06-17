@@ -83,6 +83,11 @@ function renderSlide(slide: Slide, index: number) {
   return `<section class="slide" data-slide id="${escapeHtml(slide.id)}" data-slide-index="${index}" style="${styleToString(slideBackgroundHtmlStyle(slide.background))}">${elements}</section>`;
 }
 
+export function renderSlideForExport(slide: Slide): { innerHtml: string; backgroundStyle: Record<string, string | number | undefined> } {
+  const innerHtml = sortElements(visibleElements(slide.elements)).map(renderElement).join("\n");
+  return { innerHtml, backgroundStyle: slideBackgroundHtmlStyle(slide.background) };
+}
+
 export function renderDeckHtml(deck: Deck) {
   const slides = deck.slides.map(renderSlide).join("\n");
   const deckJson = JSON.stringify(deck).replaceAll("<", "\\u003c");

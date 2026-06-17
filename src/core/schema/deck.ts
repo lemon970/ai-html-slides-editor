@@ -104,6 +104,12 @@ export const htmlElementSchema = baseElementSchema.extend({
   type: z.literal("html"),
   html: z.string(),
   editable: z.literal(false).optional(),
+  codeConfig: z
+    .object({
+      language: z.string().default("plaintext"),
+      theme: z.enum(["dark", "light"]).default("dark"),
+    })
+    .optional(),
 });
 
 export const slideElementSchema = z.discriminatedUnion("type", [

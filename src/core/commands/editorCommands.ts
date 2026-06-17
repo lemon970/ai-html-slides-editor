@@ -8,10 +8,12 @@ import {
   nudgeElements,
   ungroupElements,
   updateElement,
+  updateElements,
 } from "@/core/ops/deckOperations";
 import { moveElementsInLayerOrder, type LayerMoveAction } from "@/core/ops/layerOperations";
 import { selectedGroupId } from "@/core/selection/groupOperations";
 import { primarySelectedId } from "@/core/selection/selectionOperations";
+import { alignElements, distributeElements, type AlignAxis } from "@/core/ops/alignOperations";
 
 export type EditorCommand =
   | { type: "toggle-hidden"; elementIds: string[] }
@@ -27,7 +29,10 @@ export type EditorCommand =
   | { type: "rename-element"; elementId: string; name: string }
   | { type: "add-image-element"; src: string; name?: string }
   | { type: "add-text-element" }
-  | { type: "add-shape-element"; shape?: "rect" | "ellipse" };
+  | { type: "add-shape-element"; shape?: "rect" | "ellipse" }
+  | { type: "add-html-element"; html: string; language?: string; theme?: "dark" | "light" }
+  | { type: "align-elements"; elementIds: string[]; axis: AlignAxis; canvasSize: { width: number; height: number } }
+  | { type: "distribute-elements"; elementIds: string[]; axis: "horizontal" | "vertical" };
 
 export type EditorCommandState = {
   deck: Deck;
@@ -325,6 +330,40 @@ export function executeEditorCommand(
       style: { fill: "#3b82f6", borderRadius: 8 },
     };
     return appendElement(state, element);
+  }
+
+  if (command.type === "add-html-element") {
+    const element: SlideElement = {
+      id: factories.elementId(),
+      name: "代码块",
+      type: "html",
+      html: command.html,
+      x: cx - 400,
+      y: cy - 200,
+      w: 800,
+      h: 400,
+      zIndex: maxZ + 1,
+      codeConfig: { language: command.language ?? "plaintext", theme: command.theme ?? "dark" },
+    };
+    return appendElement(state, element);
+  }
+
+  if (command.type === "align-elements") {
+    const slideForAlign = getSlide(state.deck, state.currentSlideId);
+    if (!slideForAlign) return { ...state, changed: false };
+    const patches = alignElements(slideForAlign.elements, command.elementIds, command.axis, command.canvasSize);
+    if (Object.keys(patches).length === 0) return { ...state, changed: false };
+    const nextDeck = updateElements(state.deck, state.currentSlideId, patches);
+    return { ...state, deck: nextDeck, changed: true };
+  }
+
+  if (command.type === "distribute-elements") {
+    const slideForDist = getSlide(state.deck, state.currentSlideId);
+    if (!slideForDist) return { ...state, changed: false };
+    const patches = distributeElements(slideForDist.elements, command.elementIds, command.axis);
+    if (Object.keys(patches).length === 0) return { ...state, changed: false };
+    const nextDeck = updateElements(state.deck, state.currentSlideId, patches);
+    return { ...state, deck: nextDeck, changed: true };
   }
 
   return { ...state, changed: false };

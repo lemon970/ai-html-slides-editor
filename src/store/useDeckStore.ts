@@ -9,6 +9,8 @@ import {
   primaryElementIdForCommand,
   type EditorCommand,
 } from "@/core/commands/editorCommands";
+import type { AlignAxis } from "@/core/ops/alignOperations";
+import { saveDraft, clearDraft } from "@/core/persistence/draft";
 import {
   addSlide as addSlideOp,
   duplicateSlide as duplicateSlideOp,
@@ -36,6 +38,7 @@ type ElementPatch = Partial<SlideElement> & {
 
 type DeckStore = {
   appMode: "idle" | "json" | "source-html";
+  showGrid: boolean;
   deck: Deck;
   currentSlideId: string;
   selectedElementId: string | null;
@@ -71,15 +74,19 @@ type DeckStore = {
   addImageElement: (src: string, name?: string) => void;
   addTextElement: () => void;
   addShapeElement: (shape?: "rect" | "ellipse") => void;
+  addCodeElement: (language?: string) => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
+  alignSelectedElements: (axis: AlignAxis) => void;
+  distributeSelectedElements: (axis: "horizontal" | "vertical") => void;
   addSlide: (afterId?: string) => void;
   duplicateSlide: (slideId: string) => void;
   deleteSlide: (slideId: string) => void;
   moveSlide: (slideId: string, toIndex: number) => void;
   loadDeck: (deck: Deck) => void;
   setAppMode: (mode: "idle" | "json" | "source-html") => void;
+  toggleGrid: () => void;
   undo: () => void;
   redo: () => void;
   setError: (error: string | null) => void;
@@ -87,6 +94,7 @@ type DeckStore = {
 
 export const useDeckStore = create<DeckStore>()((set, get) => ({
   appMode: "idle",
+  showGrid: false,
   deck: demoDeck,
   currentSlideId: demoDeck.slides[0].id,
   selectedElementId: null,
@@ -256,6 +264,14 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   addShapeElement: (shape) => {
     get().executeCommand({ type: "add-shape-element", shape });
   },
+  addCodeElement: (language = "typescript") => {
+    get().executeCommand({
+      type: "add-html-element",
+      html: "// 在此输入代码\nfunction hello() {\n  return \"Hello, World!\";\n}",
+      language,
+      theme: "dark",
+    });
+  },
   groupSelectedElements: () => {
     get().executeCommand({
       type: "group-elements",
@@ -266,6 +282,22 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     get().executeCommand({
       type: "ungroup-elements",
       elementIds: get().selectedElementIds,
+    });
+  },
+  alignSelectedElements: (axis) => {
+    const state = get();
+    get().executeCommand({
+      type: "align-elements",
+      elementIds: state.selectedElementIds,
+      axis,
+      canvasSize: state.deck.size,
+    });
+  },
+  distributeSelectedElements: (axis) => {
+    get().executeCommand({
+      type: "distribute-elements",
+      elementIds: get().selectedElementIds,
+      axis,
     });
   },
   updateCurrentSlideBackground: (background) => {
@@ -330,7 +362,8 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
     if (nextDeck === state.deck) return;
     set({ deck: nextDeck, history: pushHistory(state.history, state.deck) });
   },
-  loadDeck: (deck) =>
+  loadDeck: (deck) => {
+    clearDraft();
     set({
       appMode: "json",
       deck: replaceDeck(deck),
@@ -340,8 +373,10 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       clipboardElementIds: [],
       history: { past: [], future: [] },
       error: null,
-    }),
+    });
+  },
   setAppMode: (mode) => set({ appMode: mode }),
+  toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
   undo: () => {
     const state = get();
     const result = undoHistory(state.history, state.deck);
@@ -370,3 +405,13 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   },
   setError: (error) => set({ error }),
 }));
+
+// Auto-save draft on deck change (debounced)
+let draftTimer: ReturnType<typeof setTimeout> | null = null;
+useDeckStore.subscribe((state, prev) => {
+  if (state.deck === prev.deck || state.appMode !== "json") return;
+  if (draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    saveDraft(state.deck, state.currentSlideId);
+  }, 1000);
+});
