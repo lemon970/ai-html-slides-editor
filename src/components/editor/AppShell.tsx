@@ -7,6 +7,7 @@ import { PropertyPanel } from "./PropertyPanel";
 import { Toolbar } from "./Toolbar";
 import { LayersPanel } from "./LayersPanel";
 import { editorShortcutFromKey, isEditableTarget } from "@/core/keyboard/editorShortcuts";
+import { sortElements } from "@/core/ops/deckOperations";
 import { useDeckStore } from "@/store/useDeckStore";
 
 export function AppShell() {
@@ -59,6 +60,16 @@ export function AppShell() {
       }
       if (shortcut.type === "ungroup") {
         ungroupSelectedElements();
+        return;
+      }
+      if (shortcut.type === "cycle-element") {
+        const state = useDeckStore.getState();
+        const slide = state.deck.slides.find((s) => s.id === state.currentSlideId);
+        if (!slide) return;
+        const candidates = sortElements(slide.elements).filter((e) => !e.hidden && !e.locked);
+        if (candidates.length === 0) return;
+        const idx = candidates.findIndex((e) => e.id === state.selectedElementId);
+        state.selectElement(candidates[(idx + shortcut.direction + candidates.length) % candidates.length].id);
         return;
       }
       nudgeSelectedElements(shortcut.delta);

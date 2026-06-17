@@ -108,6 +108,8 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
   const toggleElementLocked = useDeckStore((state) => state.toggleElementLocked);
   const toggleElementHidden = useDeckStore((state) => state.toggleElementHidden);
+  const updateElementById = useDeckStore((state) => state.updateElementById);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
   const [contextMenu, setContextMenu] = useState<{
@@ -156,6 +158,23 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     observer.observe(node);
     return () => observer.disconnect();
   }, [deckSize.width]);
+
+  useEffect(() => {
+    setEditingElementId(null);
+  }, [slide.id]);
+
+  function commitTextEdit(elementId: string, value: string) {
+    updateElementById(slide.id, elementId, { content: value });
+    setEditingElementId(null);
+  }
+
+  function handleElementDoubleClick(element: SlideElement) {
+    if (element.locked || element.type !== "text") return;
+    selectElement(element.id);
+    setInteraction(null);
+    setPreviewPatches({});
+    setEditingElementId(element.id);
+  }
 
   function handleElementPointerDown(event: PointerEvent<HTMLDivElement>, element: SlideElement) {
     if (mode !== "editable" || element.locked) {
@@ -373,6 +392,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           y: (event.clientY - interaction.startClientY) / scale,
         },
         { w: interaction.minW, h: interaction.minH },
+        event.shiftKey,
       );
       setPreviewPatches({ [interaction.elementId]: next });
       return;
@@ -591,9 +611,19 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
               selected={mode === "editable" && selectedElementIds.includes(element.id)}
               onPointerDown={handleElementPointerDown}
               onContextMenu={handleElementContextMenu}
+              onDoubleClick={handleElementDoubleClick}
             />
           );
         })}
+        {mode === "editable" && editingElementId ? (() => {
+          const el = elements.find((e) => e.id === editingElementId);
+          return el && el.type === "text" ? (
+            <TextEditOverlay
+              element={el}
+              onCommit={(value) => commitTextEdit(editingElementId, value)}
+            />
+          ) : null;
+        })() : null}
         {mode === "editable" && selectedElement && selectedElementVisible && canTransformSingleElement ? (
           <TransformBox
             element={
@@ -700,4 +730,61 @@ function normalizeMarqueeBounds(
     w: Math.abs(currentPoint.x - startPoint.x),
     h: Math.abs(currentPoint.y - startPoint.y),
   };
+}
+
+function TextEditOverlay({
+  element,
+  onCommit,
+}: {
+  element: Extract<SlideElement, { type: "text" }>;
+  onCommit: (value: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      defaultValue={element.content}
+      style={{
+        position: "absolute",
+        left: element.x,
+        top: element.y,
+        width: element.w,
+        height: element.h,
+        transform: `rotate(${element.rotation ?? 0}deg)`,
+        transformOrigin: "center center",
+        fontFamily: element.style.fontFamily,
+        fontSize: element.style.fontSize,
+        fontWeight: element.style.fontWeight as never,
+        fontStyle: element.style.fontStyle,
+        color: element.style.color,
+        lineHeight: element.style.lineHeight,
+        letterSpacing: element.style.letterSpacing,
+        textAlign: element.style.textAlign as never,
+        background: element.style.background ?? "transparent",
+        padding: element.style.padding,
+        borderRadius: element.style.borderRadius,
+        whiteSpace: "pre-wrap",
+        outline: "2px solid #0891b2",
+        resize: "none",
+        border: "none",
+        overflow: "hidden",
+        zIndex: 9000,
+        cursor: "text",
+        boxSizing: "border-box",
+      }}
+      onBlur={(e) => onCommit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCommit(e.currentTarget.value);
+        }
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+    />
+  );
 }

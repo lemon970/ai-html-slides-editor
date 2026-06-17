@@ -3,13 +3,17 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { demoDeck } from "@/data/demoDeck";
-import type { Deck, SlideBackground, SlideElement } from "@/core/schema/deck";
+import type { Deck, Slide, SlideBackground, SlideElement } from "@/core/schema/deck";
 import {
   executeEditorCommand,
   primaryElementIdForCommand,
   type EditorCommand,
 } from "@/core/commands/editorCommands";
 import {
+  addSlide as addSlideOp,
+  duplicateSlide as duplicateSlideOp,
+  deleteSlide as deleteSlideOp,
+  moveSlide as moveSlideOp,
   getElement,
   getSlide,
   replaceDeck,
@@ -69,6 +73,10 @@ type DeckStore = {
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
+  addSlide: (afterId?: string) => void;
+  duplicateSlide: (slideId: string) => void;
+  deleteSlide: (slideId: string) => void;
+  moveSlide: (slideId: string, toIndex: number) => void;
   loadDeck: (deck: Deck) => void;
   undo: () => void;
   redo: () => void;
@@ -265,6 +273,59 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       history: pushHistory(state.history, state.deck),
       error: null,
     });
+  },
+  addSlide: (afterId) => {
+    const state = get();
+    const refSlide = state.deck.slides.find((s) => s.id === (afterId ?? state.currentSlideId));
+    const newSlide: Slide = {
+      id: `slide-${nanoid(8)}`,
+      background: refSlide?.background ?? { type: "solid", color: "#ffffff" },
+      elements: [],
+    };
+    const nextDeck = addSlideOp(state.deck, newSlide, afterId ?? state.currentSlideId);
+    set({
+      deck: nextDeck,
+      currentSlideId: newSlide.id,
+      selectedElementId: null,
+      selectedElementIds: [],
+      history: pushHistory(state.history, state.deck),
+    });
+  },
+  duplicateSlide: (slideId) => {
+    const state = get();
+    const source = state.deck.slides.find((s) => s.id === slideId);
+    if (!source) return;
+    const newSlide: Slide = {
+      ...structuredClone(source),
+      id: `slide-${nanoid(8)}`,
+      elements: source.elements.map((el) => ({ ...structuredClone(el), id: `el-${nanoid(8)}` })),
+    };
+    const nextDeck = duplicateSlideOp(state.deck, slideId, newSlide);
+    set({
+      deck: nextDeck,
+      currentSlideId: newSlide.id,
+      selectedElementId: null,
+      selectedElementIds: [],
+      history: pushHistory(state.history, state.deck),
+    });
+  },
+  deleteSlide: (slideId) => {
+    const state = get();
+    if (state.deck.slides.length <= 1) return;
+    const result = deleteSlideOp(state.deck, slideId);
+    set({
+      deck: result.deck,
+      currentSlideId: result.newCurrentId,
+      selectedElementId: null,
+      selectedElementIds: [],
+      history: pushHistory(state.history, state.deck),
+    });
+  },
+  moveSlide: (slideId, toIndex) => {
+    const state = get();
+    const nextDeck = moveSlideOp(state.deck, slideId, toIndex);
+    if (nextDeck === state.deck) return;
+    set({ deck: nextDeck, history: pushHistory(state.history, state.deck) });
   },
   loadDeck: (deck) =>
     set({

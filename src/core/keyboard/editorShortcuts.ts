@@ -6,7 +6,8 @@ export type EditorShortcut =
   | { type: "group" }
   | { type: "ungroup" }
   | { type: "clear-selection" }
-  | { type: "nudge"; delta: { x: number; y: number } };
+  | { type: "nudge"; delta: { x: number; y: number } }
+  | { type: "cycle-element"; direction: 1 | -1 };
 
 export type EditorShortcutInput = {
   key: string;
@@ -22,6 +23,10 @@ export function editorShortcutFromKey(input: EditorShortcutInput): EditorShortcu
 
   if (key === "escape") {
     return { type: "clear-selection" };
+  }
+
+  if (key === "tab") {
+    return { type: "cycle-element", direction: input.shiftKey ? -1 : 1 };
   }
 
   if (!commandKey && !input.altKey) {

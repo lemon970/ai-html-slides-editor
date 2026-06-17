@@ -141,7 +141,7 @@ export function LayersPanel() {
                 key={element.id}
                 className={`layer-row ${isSelected ? "is-selected" : ""} ${
                   element.hidden ? "is-hidden" : ""
-                } ${element.groupId ? "is-grouped" : ""}`}
+                } ${element.locked ? "is-locked" : ""} ${element.groupId ? "is-grouped" : ""}`}
                 onContextMenu={(event) => handleLayerContextMenu(event, element)}
               >
                 <button
@@ -151,11 +151,6 @@ export function LayersPanel() {
                   title={element.id}
                 >
                   <span className="layer-type">{elementTypeLabel(element)}</span>
-                  <span className="layer-z">z {element.zIndex ?? 0}</span>
-                  {element.groupId ? <span className="layer-group">{element.groupId}</span> : null}
-                  <span className="layer-state">
-                    {element.locked ? "已锁定" : "可编辑"} / {element.hidden ? "已隐藏" : "可见"}
-                  </span>
                 </button>
                 <input
                   key={element.name ?? elementLabel(element)}

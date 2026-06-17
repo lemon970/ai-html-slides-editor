@@ -10,6 +10,7 @@ type ElementRendererProps = {
   mode: "editable" | "thumbnail";
   onPointerDown?: (event: PointerEvent<HTMLDivElement>, element: SlideElement) => void;
   onContextMenu?: (event: MouseEvent<HTMLDivElement>, element: SlideElement) => void;
+  onDoubleClick?: (element: SlideElement) => void;
 };
 
 function baseStyle(element: SlideElement): CSSProperties {
@@ -22,6 +23,7 @@ export function ElementRenderer({
   mode,
   onPointerDown,
   onContextMenu,
+  onDoubleClick,
 }: ElementRendererProps) {
   const className = `slide-element ${selected ? "is-selected" : ""}`;
   const commonProps = {
@@ -35,6 +37,10 @@ export function ElementRenderer({
     onContextMenu:
       mode === "editable"
         ? (event: MouseEvent<HTMLDivElement>) => onContextMenu?.(event, element)
+        : undefined,
+    onDoubleClick:
+      mode === "editable"
+        ? (event: MouseEvent<HTMLDivElement>) => { event.stopPropagation(); onDoubleClick?.(element); }
         : undefined,
   };
 

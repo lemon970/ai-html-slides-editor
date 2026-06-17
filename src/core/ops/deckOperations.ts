@@ -1,4 +1,4 @@
-import type { Deck, SlideElement } from "@/core/schema/deck";
+import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 
 type ElementPatch = Partial<SlideElement> & {
   style?: Record<string, unknown>;
@@ -227,6 +227,40 @@ export function duplicateElements(
     },
     duplicatedElementIds: duplicatedElements.map((element) => element.id),
   };
+}
+
+export function addSlide(deck: Deck, newSlide: Slide, afterId?: string): Deck {
+  const idx = afterId ? deck.slides.findIndex((s) => s.id === afterId) : -1;
+  const insertAt = idx >= 0 ? idx + 1 : deck.slides.length;
+  const slides = [...deck.slides];
+  slides.splice(insertAt, 0, newSlide);
+  return { ...deck, slides };
+}
+
+export function duplicateSlide(deck: Deck, slideId: string, newSlide: Slide): Deck {
+  const idx = deck.slides.findIndex((s) => s.id === slideId);
+  if (idx < 0) return deck;
+  const slides = [...deck.slides];
+  slides.splice(idx + 1, 0, newSlide);
+  return { ...deck, slides };
+}
+
+export function deleteSlide(deck: Deck, slideId: string): { deck: Deck; newCurrentId: string } {
+  if (deck.slides.length <= 1) return { deck, newCurrentId: deck.slides[0].id };
+  const idx = deck.slides.findIndex((s) => s.id === slideId);
+  if (idx < 0) return { deck, newCurrentId: deck.slides[0].id };
+  const slides = deck.slides.filter((s) => s.id !== slideId);
+  const newCurrentId = (slides[idx - 1] ?? slides[0]).id;
+  return { deck: { ...deck, slides }, newCurrentId };
+}
+
+export function moveSlide(deck: Deck, slideId: string, toIndex: number): Deck {
+  const idx = deck.slides.findIndex((s) => s.id === slideId);
+  if (idx < 0) return deck;
+  const slides = [...deck.slides];
+  const [slide] = slides.splice(idx, 1);
+  slides.splice(Math.max(0, Math.min(toIndex, slides.length)), 0, slide);
+  return { ...deck, slides };
 }
 
 export function nudgeElements(
