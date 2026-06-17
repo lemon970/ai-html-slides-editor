@@ -10,9 +10,10 @@ export type TextNode = {
 function walk(el: Element, path: number[], out: TextNode[]) {
   if (SKIP.has(el.tagName) || out.length >= 30) return;
 
-  const visibleChildren = [...el.children].filter((c) => !SKIP.has(c.tagName));
+  const allChildren = [...el.children];
+  const nonSkip = allChildren.filter((c) => !SKIP.has(c.tagName));
 
-  if (visibleChildren.length === 0) {
+  if (nonSkip.length === 0) {
     const text = el.textContent?.trim() ?? "";
     if (text) out.push({ path, tag: el.tagName.toLowerCase(), className: el.className, text });
     return;
@@ -26,7 +27,10 @@ function walk(el: Element, path: number[], out: TextNode[]) {
     if (text) { out.push({ path, tag: el.tagName.toLowerCase(), className: el.className, text }); return; }
   }
 
-  visibleChildren.forEach((child, i) => walk(child, [...path, i], out));
+  // Use RAW children index so path matches node.children[i] access in the store
+  allChildren.forEach((child, i) => {
+    if (!SKIP.has(child.tagName)) walk(child, [...path, i], out);
+  });
 }
 
 export function extractTextNodes(slideEl: HTMLElement): TextNode[] {

@@ -18,7 +18,7 @@ export function TextEditPanel() {
   return (
     <div className="text-edit-list">
       {nodes.map((node, i) => (
-        <div key={i} className="text-edit-row">
+        <div key={`${currentIndex}-${i}`} className="text-edit-row">
           <span className="text-edit-tag" title={node.tag}>
             {node.className ? node.className.split(" ")[0] : node.tag}
           </span>

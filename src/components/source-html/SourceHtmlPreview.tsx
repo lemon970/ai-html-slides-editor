@@ -21,7 +21,7 @@ export function SourceHtmlPreview() {
         { __sls: 1, type: "navigate", index: currentIndex },
         "*",
       );
-    }, 120);
+    }, 500);
   }
 
   return (
