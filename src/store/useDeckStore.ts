@@ -35,6 +35,7 @@ type ElementPatch = Partial<SlideElement> & {
 };
 
 type DeckStore = {
+  appMode: "idle" | "json" | "source-html";
   deck: Deck;
   currentSlideId: string;
   selectedElementId: string | null;
@@ -78,12 +79,14 @@ type DeckStore = {
   deleteSlide: (slideId: string) => void;
   moveSlide: (slideId: string, toIndex: number) => void;
   loadDeck: (deck: Deck) => void;
+  setAppMode: (mode: "idle" | "json" | "source-html") => void;
   undo: () => void;
   redo: () => void;
   setError: (error: string | null) => void;
 };
 
 export const useDeckStore = create<DeckStore>()((set, get) => ({
+  appMode: "idle",
   deck: demoDeck,
   currentSlideId: demoDeck.slides[0].id,
   selectedElementId: null,
@@ -329,6 +332,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   },
   loadDeck: (deck) =>
     set({
+      appMode: "json",
       deck: replaceDeck(deck),
       currentSlideId: deck.slides[0]?.id ?? "",
       selectedElementId: null,
@@ -337,6 +341,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       history: { past: [], future: [] },
       error: null,
     }),
+  setAppMode: (mode) => set({ appMode: mode }),
   undo: () => {
     const state = get();
     const result = undoHistory(state.history, state.deck);
