@@ -1,8 +1,11 @@
 "use client";
 
-import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ElementRenderer } from "./ElementRenderer";
 import { TransformBox } from "./controls/TransformBox";
+import { fileToDataUrl, imageAccept } from "@/core/assets/imageDataUrl";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import type { EditorCommand } from "@/core/commands/editorCommands";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { boundsFromElements, elementBounds, type Bounds } from "@/core/geometry/bounds";
@@ -87,19 +90,31 @@ function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | 
 
 export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
   const selectedElementIds = useDeckStore((state) => state.selectedElementIds);
+  const clipboardElementIds = useDeckStore((state) => state.clipboardElementIds);
   const selectElement = useDeckStore((state) => state.selectElement);
   const selectElements = useDeckStore((state) => state.selectElements);
   const toggleElementSelection = useDeckStore((state) => state.toggleElementSelection);
   const clearSelection = useDeckStore((state) => state.clearSelection);
   const updateElementsById = useDeckStore((state) => state.updateElementsById);
+  const executeCommand = useDeckStore((state) => state.executeCommand);
+  const addImageElement = useDeckStore((state) => state.addImageElement);
+  const addTextElement = useDeckStore((state) => state.addTextElement);
+  const addShapeElement = useDeckStore((state) => state.addShapeElement);
+  const setError = useDeckStore((state) => state.setError);
   const duplicateSelectedElements = useDeckStore((state) => state.duplicateSelectedElements);
   const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
   const toggleElementLocked = useDeckStore((state) => state.toggleElementLocked);
   const toggleElementHidden = useDeckStore((state) => state.toggleElementHidden);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  } | null>(null);
   const [scale, setScale] = useState(1);
   const elements = useMemo(() => sortElements(slide.elements), [slide.elements]);
   const renderElements = useMemo(() => visibleElements(elements), [elements]);
@@ -188,6 +203,67 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       startClientX: event.clientX,
       startClientY: event.clientY,
       startBounds: elementBounds(element),
+    });
+  }
+
+  function runCommand(command: EditorCommand) {
+    executeCommand(command);
+    setContextMenu(null);
+  }
+
+  function handleElementContextMenu(event: MouseEvent<HTMLDivElement>, element: SlideElement) {
+    if (mode !== "editable") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const elementIds = selectedElementIds.includes(element.id) ? selectedElementIds : [element.id];
+    if (!selectedElementIds.includes(element.id)) {
+      selectElement(element.id);
+    }
+
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "复制",
+          onSelect: () => runCommand({ type: "copy-elements", elementIds }),
+        },
+        {
+          label: "快速复制",
+          onSelect: () => runCommand({ type: "duplicate-elements", elementIds }),
+        },
+        {
+          label: "删除",
+          onSelect: () => runCommand({ type: "delete-elements", elementIds }),
+        },
+        {
+          label: element.locked ? "解锁" : "锁定",
+          onSelect: () => runCommand({ type: "toggle-locked", elementIds }),
+        },
+        {
+          label: element.hidden ? "显示" : "隐藏",
+          onSelect: () => runCommand({ type: "toggle-hidden", elementIds }),
+        },
+        {
+          label: "置顶",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "bring-to-front" }),
+        },
+        {
+          label: "上移一层",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "bring-forward" }),
+        },
+        {
+          label: "下移一层",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "send-backward" }),
+        },
+        {
+          label: "置底",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "send-to-back" }),
+        },
+      ],
     });
   }
 
@@ -384,6 +460,41 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     });
   }
 
+  function handleCanvasContextMenu(event: MouseEvent<HTMLDivElement>) {
+    if (mode !== "editable") {
+      return;
+    }
+
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "粘贴",
+          disabled: clipboardElementIds.length === 0,
+          onSelect: () => runCommand({ type: "paste-elements" }),
+        },
+        {
+          label: "新建文本",
+          onSelect: () => { addTextElement(); setContextMenu(null); },
+        },
+        {
+          label: "新建矩形",
+          onSelect: () => { addShapeElement("rect"); setContextMenu(null); },
+        },
+        {
+          label: "新建椭圆",
+          onSelect: () => { addShapeElement("ellipse"); setContextMenu(null); },
+        },
+        {
+          label: "导入图片",
+          onSelect: () => { imageInputRef.current?.click(); setContextMenu(null); },
+        },
+      ],
+    });
+  }
+
   function startMultiMove(event: PointerEvent<HTMLElement>) {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -455,6 +566,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={commitInteraction}
       onPointerCancel={commitInteraction}
+      onContextMenu={handleCanvasContextMenu}
     >
       <div
         className="slide-coordinate-space"
@@ -478,6 +590,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
               mode={mode}
               selected={mode === "editable" && selectedElementIds.includes(element.id)}
               onPointerDown={handleElementPointerDown}
+              onContextMenu={handleElementContextMenu}
             />
           );
         })}
@@ -541,6 +654,32 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           />
         ) : null}
       </div>
+      {mode === "editable" && contextMenu ? (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept={imageAccept}
+        aria-label="选择图片文件"
+        tabIndex={-1}
+        className="visually-hidden"
+        onChange={async (event: ChangeEvent<HTMLInputElement>) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          try {
+            addImageElement(await fileToDataUrl(file), file.name);
+          } catch {
+            setError("导入图片失败。");
+          }
+        }}
+      />
     </div>
   );
 }

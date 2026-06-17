@@ -25,7 +25,9 @@ export type EditorCommand =
   | { type: "ungroup-elements"; elementIds: string[] }
   | { type: "move-layer"; elementIds: string[]; action: LayerMoveAction }
   | { type: "rename-element"; elementId: string; name: string }
-  | { type: "add-image-element"; src: string; name?: string };
+  | { type: "add-image-element"; src: string; name?: string }
+  | { type: "add-text-element" }
+  | { type: "add-shape-element"; shape?: "rect" | "ellipse" };
 
 export type EditorCommandState = {
   deck: Deck;
@@ -270,27 +272,72 @@ export function executeEditorCommand(
     };
   }
 
-  const element = createImageElement(
-    state.deck,
-    state.currentSlideId,
-    factories.elementId(),
-    command.src,
-    command.name,
-  );
-  if (!element) {
+  const slide = getSlide(state.deck, state.currentSlideId);
+  if (!slide) {
     return { ...state, changed: false };
   }
 
+  const maxZ = Math.max(...slide.elements.map((e) => e.zIndex ?? 0), 0);
+  const cx = Math.round(state.deck.size.width / 2);
+  const cy = Math.round(state.deck.size.height / 2);
+
+  if (command.type === "add-image-element") {
+    const element = createImageElement(
+      state.deck,
+      state.currentSlideId,
+      factories.elementId(),
+      command.src,
+      command.name,
+    );
+    if (!element) {
+      return { ...state, changed: false };
+    }
+    return appendElement(state, element);
+  }
+
+  if (command.type === "add-text-element") {
+    const element: SlideElement = {
+      id: factories.elementId(),
+      name: "文本",
+      type: "text",
+      content: "双击编辑文本",
+      x: cx - 200,
+      y: cy - 40,
+      w: 400,
+      h: 80,
+      zIndex: maxZ + 1,
+      style: { fontSize: 24, color: "#0f172a" },
+    };
+    return appendElement(state, element);
+  }
+
+  if (command.type === "add-shape-element") {
+    const element: SlideElement = {
+      id: factories.elementId(),
+      name: command.shape === "ellipse" ? "椭圆" : "矩形",
+      type: "shape",
+      shape: command.shape ?? "rect",
+      x: cx - 100,
+      y: cy - 60,
+      w: 200,
+      h: 120,
+      zIndex: maxZ + 1,
+      style: { fill: "#3b82f6", borderRadius: 8 },
+    };
+    return appendElement(state, element);
+  }
+
+  return { ...state, changed: false };
+}
+
+function appendElement(state: EditorCommandState, element: SlideElement): EditorCommandResult {
   return {
     ...state,
     deck: {
       ...state.deck,
       slides: state.deck.slides.map((slide) =>
         slide.id === state.currentSlideId
-          ? {
-              ...slide,
-              elements: [...slide.elements, element],
-            }
+          ? { ...slide, elements: [...slide.elements, element] }
           : slide,
       ),
     },

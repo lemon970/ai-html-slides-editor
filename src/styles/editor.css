@@ -146,9 +146,13 @@
 
 .layer-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px 48px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 6px;
+  padding: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .layer-row.is-grouped {
@@ -161,6 +165,7 @@
 }
 
 .layer-main,
+.layer-name-input,
 .layer-icon-button {
   min-width: 0;
   border: 1px solid #d8e0ea;
@@ -191,13 +196,22 @@
   font-weight: 800;
 }
 
-.layer-name {
+.layer-z {
   overflow: hidden;
   color: #0f172a;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.layer-name-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .layer-group {
@@ -218,10 +232,17 @@
 .layer-icon-button {
   display: grid;
   place-items: center;
+  min-height: 30px;
   padding: 0;
   color: #475569;
   font-size: 11px;
   font-weight: 800;
+}
+
+.layer-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .layer-icon-button[aria-pressed="true"] {
@@ -361,6 +382,40 @@
   color: #64748b;
   font-size: 11px;
   white-space: nowrap;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 9000;
+  display: grid;
+  width: 188px;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.24);
+}
+
+.context-menu button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
+.context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .resize-handle,

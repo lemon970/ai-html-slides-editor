@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, PointerEvent } from "react";
+import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import type { SlideElement } from "@/core/schema/deck";
 import { elementBaseReactStyle, textReactStyle } from "@/core/style/css";
 
@@ -9,6 +9,7 @@ type ElementRendererProps = {
   selected?: boolean;
   mode: "editable" | "thumbnail";
   onPointerDown?: (event: PointerEvent<HTMLDivElement>, element: SlideElement) => void;
+  onContextMenu?: (event: MouseEvent<HTMLDivElement>, element: SlideElement) => void;
 };
 
 function baseStyle(element: SlideElement): CSSProperties {
@@ -20,6 +21,7 @@ export function ElementRenderer({
   selected = false,
   mode,
   onPointerDown,
+  onContextMenu,
 }: ElementRendererProps) {
   const className = `slide-element ${selected ? "is-selected" : ""}`;
   const commonProps = {
@@ -29,6 +31,10 @@ export function ElementRenderer({
     onPointerDown:
       mode === "editable"
         ? (event: PointerEvent<HTMLDivElement>) => onPointerDown?.(event, element)
+        : undefined,
+    onContextMenu:
+      mode === "editable"
+        ? (event: MouseEvent<HTMLDivElement>) => onContextMenu?.(event, element)
         : undefined,
   };
 

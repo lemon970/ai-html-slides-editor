@@ -64,6 +64,8 @@ type DeckStore = {
     action: Extract<EditorCommand, { type: "move-layer" }>["action"],
   ) => void;
   addImageElement: (src: string, name?: string) => void;
+  addTextElement: () => void;
+  addShapeElement: (shape?: "rect" | "ellipse") => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
@@ -236,6 +238,12 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   },
   addImageElement: (src, name) => {
     get().executeCommand({ type: "add-image-element", src, name });
+  },
+  addTextElement: () => {
+    get().executeCommand({ type: "add-text-element" });
+  },
+  addShapeElement: (shape) => {
+    get().executeCommand({ type: "add-shape-element", shape });
   },
   groupSelectedElements: () => {
     get().executeCommand({
