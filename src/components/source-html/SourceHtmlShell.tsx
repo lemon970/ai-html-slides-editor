@@ -11,6 +11,7 @@ import { ThemeVarPanel } from "./ThemeVarPanel";
 
 export function SourceHtmlShell() {
   const fileName = useSourceHtmlStore((s) => s.fileName);
+  const notice = useSourceHtmlStore((s) => s.notice);
   const serialize = useSourceHtmlStore((s) => s.serialize);
   const reset = useSourceHtmlStore((s) => s.reset);
   const setAppMode = useDeckStore((s) => s.setAppMode);
@@ -48,6 +49,7 @@ export function SourceHtmlShell() {
         <button type="button" className="source-html-upgrade" onClick={() => setShowUpgrade(true)}>升级为完整编辑</button>
         <button type="button" className="source-html-export" onClick={handleExport}>导出 HTML</button>
       </header>
+      {notice ? <div className="source-html-notice">{notice}</div> : null}
       <div className="source-html-workspace">
         <SlideThumbList />
         <SourceHtmlPreview />

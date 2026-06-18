@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import type { SlideElement } from "@/core/schema/deck";
+import { renderCodeFallback, sanitizeHtml } from "@/core/render/safeHtml";
 import { elementBaseReactStyle, textReactStyle } from "@/core/style/css";
 
 type ElementRendererProps = {
@@ -28,12 +29,12 @@ function CodeRenderer({ element }: { element: Extract<SlideElement, { type: "htm
     ).then((hl) => {
       if (!cancelled) setHtml(hl.codeToHtml(element.html, { lang, theme }));
     }).catch(() => {
-      if (!cancelled) setHtml(`<pre style="margin:0;padding:12px;white-space:pre-wrap;">${element.html}</pre>`);
+      if (!cancelled) setHtml(renderCodeFallback(element.html));
     });
     return () => { cancelled = true; };
   }, [element.html, element.codeConfig?.language, element.codeConfig?.theme]);
 
-  return <div dangerouslySetInnerHTML={{ __html: html || `<pre style="margin:0;padding:12px;">${element.html}</pre>` }} style={{ width: "100%", height: "100%", overflow: "hidden" }} />;
+  return <div dangerouslySetInnerHTML={{ __html: html || renderCodeFallback(element.html) }} style={{ width: "100%", height: "100%", overflow: "hidden" }} />;
 }
 
 export function ElementRenderer({
@@ -86,6 +87,5 @@ export function ElementRenderer({
     return <div {...commonProps} style={{ ...baseStyle(element), overflow: "hidden" }}><CodeRenderer element={element} /></div>;
   }
 
-  return <div {...commonProps} style={baseStyle(element)} dangerouslySetInnerHTML={{ __html: element.html }} />;
+  return <div {...commonProps} style={baseStyle(element)} dangerouslySetInnerHTML={{ __html: element.trustedHtml ? element.html : sanitizeHtml(element.html) }} />;
 }
-

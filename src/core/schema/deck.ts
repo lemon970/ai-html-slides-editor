@@ -82,6 +82,8 @@ export const textElementSchema = baseElementSchema.extend({
 export const imageElementSchema = baseElementSchema.extend({
   type: z.literal("image"),
   src: z.string().min(1),
+  assetId: z.string().optional(),
+  assetStatus: z.enum(["omitted"]).optional(),
   alt: z.string().optional(),
   objectFit: z.enum(["cover", "contain", "fill"]).optional(),
   style: z
@@ -104,6 +106,7 @@ export const htmlElementSchema = baseElementSchema.extend({
   type: z.literal("html"),
   html: z.string(),
   editable: z.literal(false).optional(),
+  trustedHtml: z.boolean().optional(),
   codeConfig: z
     .object({
       language: z.string().default("plaintext"),
@@ -132,6 +135,17 @@ export const themeSchema = z.object({
   accentColor: z.string(),
 });
 
+export const deckAssetSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("image"),
+  name: z.string(),
+  src: z.string().min(1),
+  mimeType: z.string().optional(),
+  width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
+  createdAt: z.string().optional(),
+});
+
 export const deckSchema = z.object({
   version: z.literal("0.1"),
   id: z.string().min(1),
@@ -139,9 +153,11 @@ export const deckSchema = z.object({
   size: deckSizeSchema,
   theme: themeSchema,
   slides: z.array(slideSchema).min(1),
+  assets: z.array(deckAssetSchema).optional(),
 });
 
 export type Deck = z.infer<typeof deckSchema>;
+export type DeckAsset = z.infer<typeof deckAssetSchema>;
 export type Slide = z.infer<typeof slideSchema>;
 export type SlideBackground = z.infer<typeof slideBackgroundSchema>;
 export type SlideElement = z.infer<typeof slideElementSchema>;

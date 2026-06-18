@@ -29,7 +29,7 @@ export function SourceHtmlPreview() {
       ref={iframeRef}
       className="source-html-preview"
       srcDoc={injectedHtml}
-      sandbox="allow-scripts allow-same-origin"
+      sandbox="allow-scripts"
       title="演示文稿预览"
       onLoad={handleLoad}
     />

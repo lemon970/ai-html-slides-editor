@@ -1,4 +1,4 @@
-import type { Deck, SlideElement } from "@/core/schema/deck";
+import type { Deck, DeckAsset, SlideElement } from "@/core/schema/deck";
 import {
   deleteElements,
   duplicateElements,
@@ -14,6 +14,7 @@ import { moveElementsInLayerOrder, type LayerMoveAction } from "@/core/ops/layer
 import { selectedGroupId } from "@/core/selection/groupOperations";
 import { primarySelectedId } from "@/core/selection/selectionOperations";
 import { alignElements, distributeElements, type AlignAxis } from "@/core/ops/alignOperations";
+import { addImageAsset, getAsset, replaceImageWithAsset } from "@/core/ops/assetOperations";
 
 export type EditorCommand =
   | { type: "toggle-hidden"; elementIds: string[] }
@@ -27,7 +28,9 @@ export type EditorCommand =
   | { type: "ungroup-elements"; elementIds: string[] }
   | { type: "move-layer"; elementIds: string[]; action: LayerMoveAction }
   | { type: "rename-element"; elementId: string; name: string }
-  | { type: "add-image-element"; src: string; name?: string }
+  | { type: "add-image-element"; src: string; name?: string; mimeType?: string }
+  | { type: "insert-image-asset"; assetId: string }
+  | { type: "replace-image-with-asset"; elementId: string; assetId: string }
   | { type: "add-text-element" }
   | { type: "add-shape-element"; shape?: "rect" | "ellipse" }
   | { type: "add-html-element"; html: string; language?: string; theme?: "dark" | "light" }
@@ -44,6 +47,7 @@ export type EditorCommandState = {
 export type EditorCommandFactories = {
   elementId: () => string;
   groupId: () => string;
+  assetId: () => string;
 };
 
 export type EditorCommandResult = EditorCommandState & {
@@ -67,6 +71,7 @@ function createImageElement(
   id: string,
   src: string,
   name?: string,
+  assetId?: string,
 ): SlideElement | null {
   const slide = getSlide(deck, slideId);
   if (!slide) {
@@ -79,6 +84,7 @@ function createImageElement(
     name: name || "导入图片",
     type: "image",
     src,
+    assetId,
     alt: name || "",
     objectFit: "cover",
     x: Math.round((deck.size.width - 420) / 2),
@@ -287,17 +293,62 @@ export function executeEditorCommand(
   const cy = Math.round(state.deck.size.height / 2);
 
   if (command.type === "add-image-element") {
+    const asset: DeckAsset = {
+      id: factories.assetId(),
+      type: "image",
+      name: command.name || "导入图片",
+      src: command.src,
+      mimeType: command.mimeType,
+      createdAt: new Date().toISOString(),
+    };
+    const deckWithAsset = addImageAsset(state.deck, asset);
     const element = createImageElement(
-      state.deck,
+      deckWithAsset,
       state.currentSlideId,
       factories.elementId(),
       command.src,
       command.name,
+      asset.id,
+    );
+    if (!element) {
+      return { ...state, changed: false };
+    }
+    return appendElement({ ...state, deck: deckWithAsset }, element);
+  }
+
+  if (command.type === "insert-image-asset") {
+    const asset = getAsset(state.deck, command.assetId);
+    if (!asset) {
+      return { ...state, changed: false };
+    }
+    const element = createImageElement(
+      state.deck,
+      state.currentSlideId,
+      factories.elementId(),
+      asset.src,
+      asset.name,
+      asset.id,
     );
     if (!element) {
       return { ...state, changed: false };
     }
     return appendElement(state, element);
+  }
+
+  if (command.type === "replace-image-with-asset") {
+    const asset = getAsset(state.deck, command.assetId);
+    if (!asset) {
+      return { ...state, changed: false };
+    }
+    const nextDeck = replaceImageWithAsset(
+      state.deck,
+      state.currentSlideId,
+      command.elementId,
+      asset,
+    );
+    return nextDeck === state.deck
+      ? { ...state, changed: false }
+      : { ...state, deck: nextDeck, changed: true };
   }
 
   if (command.type === "add-text-element") {
@@ -388,4 +439,3 @@ function appendElement(state: EditorCommandState, element: SlideElement): Editor
 export function primaryElementIdForCommand(result: Pick<EditorCommandState, "selectedElementIds">) {
   return primarySelectedId(result.selectedElementIds);
 }
-

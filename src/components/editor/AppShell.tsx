@@ -7,6 +7,7 @@ import { PropertyPanel } from "./PropertyPanel";
 import { Toolbar } from "./Toolbar";
 import { ContextBar } from "./ContextBar";
 import { LayersPanel } from "./LayersPanel";
+import { MediaPanel } from "./MediaPanel";
 import { PresentationMode } from "./PresentationMode";
 import { editorShortcutFromKey, isEditableTarget } from "@/core/keyboard/editorShortcuts";
 import { sortElements } from "@/core/ops/deckOperations";
@@ -87,6 +88,7 @@ export function AppShell() {
         <SlideNavigator />
         <SlideViewport />
         <aside className="right-sidebar">
+          <MediaPanel />
           <LayersPanel />
           <PropertyPanel />
         </aside>

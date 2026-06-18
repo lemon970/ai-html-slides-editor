@@ -20,6 +20,7 @@ function state(overrides: Partial<EditorCommandState> = {}): EditorCommandState 
 const factories = {
   elementId: () => "generated-element",
   groupId: () => "generated-group",
+  assetId: () => "generated-asset",
 };
 
 describe("editor commands", () => {
@@ -119,8 +120,48 @@ describe("editor commands", () => {
     expect(getElement(result.deck, "slide-1", "generated-element")).toMatchObject({
       type: "image",
       src: "data:image/png;base64,abc",
+      assetId: "generated-asset",
       name: "image.png",
     });
+    expect(result.deck.assets?.[0]).toMatchObject({
+      id: "generated-asset",
+      type: "image",
+      name: "image.png",
+      src: "data:image/png;base64,abc",
+    });
     expect(primaryElementIdForCommand(result)).toBe("generated-element");
+  });
+
+  it("inserts and replaces images from existing assets", () => {
+    const base = state();
+    base.deck.assets = [{
+      id: "asset-existing",
+      type: "image",
+      name: "existing.png",
+      src: "data:image/png;base64,existing",
+    }];
+
+    const inserted = executeEditorCommand(
+      base,
+      { type: "insert-image-asset", assetId: "asset-existing" },
+      factories,
+    );
+    const replaced = executeEditorCommand(
+      inserted,
+      { type: "replace-image-with-asset", elementId: "cover-image", assetId: "asset-existing" },
+      factories,
+    );
+
+    expect(getElement(inserted.deck, "slide-1", "generated-element")).toMatchObject({
+      type: "image",
+      assetId: "asset-existing",
+    });
+    expect(getElement(replaced.deck, "slide-1", "cover-image")).toMatchObject({
+      type: "image",
+      assetId: "asset-existing",
+      src: "data:image/png;base64,existing",
+      x: 910,
+      y: 166,
+    });
   });
 });

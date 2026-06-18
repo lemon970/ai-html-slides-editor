@@ -71,7 +71,9 @@ type DeckStore = {
     elementIds: string[],
     action: Extract<EditorCommand, { type: "move-layer" }>["action"],
   ) => void;
-  addImageElement: (src: string, name?: string) => void;
+  addImageElement: (src: string, name?: string, mimeType?: string) => void;
+  insertImageAsset: (assetId: string) => void;
+  replaceSelectedImageWithAsset: (assetId: string) => void;
   addTextElement: () => void;
   addShapeElement: (shape?: "rect" | "ellipse") => void;
   addCodeElement: (language?: string) => void;
@@ -191,6 +193,7 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       {
         elementId: () => `el-${nanoid(8)}`,
         groupId: () => `group-${nanoid(8)}`,
+        assetId: () => `asset-${nanoid(8)}`,
       },
     );
 
@@ -255,8 +258,8 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   moveElementsLayer: (elementIds, action) => {
     get().executeCommand({ type: "move-layer", elementIds, action });
   },
-  addImageElement: (src, name) => {
-    get().executeCommand({ type: "add-image-element", src, name });
+  addImageElement: (src, name, mimeType) => {
+    get().executeCommand({ type: "add-image-element", src, name, mimeType });
   },
   addTextElement: () => {
     get().executeCommand({ type: "add-text-element" });
@@ -271,6 +274,15 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
       language,
       theme: "dark",
     });
+  },
+  insertImageAsset: (assetId: string) => {
+    get().executeCommand({ type: "insert-image-asset", assetId });
+  },
+  replaceSelectedImageWithAsset: (assetId: string) => {
+    const state = get();
+    const elementId = state.selectedElementIds[0];
+    if (!elementId) return;
+    get().executeCommand({ type: "replace-image-with-asset", elementId, assetId });
   },
   groupSelectedElements: () => {
     get().executeCommand({

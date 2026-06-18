@@ -1,4 +1,5 @@
 import type { Deck, Slide } from "@/core/schema/deck";
+import { assertDeckRasterExportable, assertSlideRasterExportable } from "@/core/export/preflight";
 import { renderSlideForExport } from "@/core/render/renderDeckHtml";
 import { styleToString } from "@/core/style/css";
 
@@ -38,23 +39,35 @@ async function slideToCanvas(slide: Slide, deck: Deck): Promise<HTMLCanvasElemen
   }
 }
 
+export async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("PNG 导出失败：浏览器没有生成图片数据。"));
+        return;
+      }
+      resolve(blob);
+    }, "image/png"),
+  );
+}
+
 export async function exportSlideAsPng(slide: Slide, deck: Deck, filename: string) {
+  assertSlideRasterExportable(slide, deck.slides.findIndex((item) => item.id === slide.id));
   const canvas = await slideToCanvas(slide, deck);
-  canvas.toBlob((blob) => { if (blob) downloadBlob(blob, filename); }, "image/png");
+  downloadBlob(await canvasToPngBlob(canvas), filename);
 }
 
 export async function exportDeckAsPng(
   deck: Deck,
   onProgress?: (current: number, total: number) => void,
 ) {
+  assertDeckRasterExportable(deck);
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   for (let i = 0; i < deck.slides.length; i++) {
     onProgress?.(i + 1, deck.slides.length);
     const canvas = await slideToCanvas(deck.slides[i], deck);
-    const blob = await new Promise<Blob>((res) =>
-      canvas.toBlob((b) => res(b!), "image/png"),
-    );
+    const blob = await canvasToPngBlob(canvas);
     zip.file(`slide-${String(i + 1).padStart(2, "0")}.png`, blob);
   }
   const zipBlob = await zip.generateAsync({ type: "blob" });

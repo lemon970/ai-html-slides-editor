@@ -57,7 +57,7 @@ export function Toolbar({ onPresent }: { onPresent: () => void }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    try { addImageElement(await fileToDataUrl(file), file.name); }
+    try { addImageElement(await fileToDataUrl(file), file.name, file.type); }
     catch (error) { setError(error instanceof Error ? error.message : "导入图片失败。"); }
   }
 

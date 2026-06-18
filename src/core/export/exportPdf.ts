@@ -1,4 +1,5 @@
 import type { Deck } from "@/core/schema/deck";
+import { assertDeckRasterExportable } from "@/core/export/preflight";
 import { renderSlideForExport } from "@/core/render/renderDeckHtml";
 import { styleToString } from "@/core/style/css";
 
@@ -33,6 +34,7 @@ export async function exportDeckAsPdf(
   deck: Deck,
   onProgress?: (current: number, total: number) => void,
 ) {
+  assertDeckRasterExportable(deck);
   const jsPDF = (await import("jspdf")).default;
   const pw = deck.size.width;
   const ph = deck.size.height;

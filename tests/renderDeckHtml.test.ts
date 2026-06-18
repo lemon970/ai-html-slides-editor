@@ -62,4 +62,42 @@ describe("renderDeckHtml", () => {
     expect(html).not.toContain('data-element-id="cover-title"');
     expect(html).toContain('"hidden":true');
   });
+
+  it("escapes code blocks as source text during export", () => {
+    const deck = structuredClone(demoDeck);
+    deck.slides[0].elements.push({
+      id: "code-danger",
+      type: "html",
+      html: "</code><script>alert(1)</script>",
+      codeConfig: { language: "html", theme: "dark" },
+      x: 0,
+      y: 0,
+      w: 400,
+      h: 200,
+    });
+
+    const html = renderDeckHtml(deck);
+
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("</code><script>alert(1)</script>");
+  });
+
+  it("sanitizes untrusted html elements during export", () => {
+    const deck = structuredClone(demoDeck);
+    deck.slides[0].elements.push({
+      id: "html-danger",
+      type: "html",
+      html: `<img src="x" onerror="alert(1)"><script>alert(2)</script>`,
+      x: 0,
+      y: 0,
+      w: 400,
+      h: 200,
+    });
+
+    const html = renderDeckHtml(deck);
+
+    expect(html).toContain("<img");
+    expect(html).not.toContain(`<img src="x" onerror`);
+    expect(html).not.toContain("<script>alert(2)</script>");
+  });
 });

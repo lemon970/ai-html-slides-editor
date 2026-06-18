@@ -1,15 +1,7 @@
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements, visibleElements } from "@/core/ops/deckOperations";
+import { escapeHtml, renderCodeFallback, sanitizeHtml } from "@/core/render/safeHtml";
 import { slideBackgroundHtmlStyle, textHtmlStyle } from "@/core/style/css";
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
 
 function styleToString(style: Record<string, string | number | undefined>) {
   return Object.entries(style)
@@ -75,7 +67,12 @@ function renderElement(element: SlideElement) {
   }
 
   const style = styleToString(baseElementStyle(element));
-  return `<div ${dataAttrs} style="${style}">${element.html}</div>`;
+  const html = element.codeConfig
+    ? renderCodeFallback(element.html)
+    : element.trustedHtml
+      ? element.html
+      : sanitizeHtml(element.html);
+  return `<div ${dataAttrs} style="${style}">${html}</div>`;
 }
 
 function renderSlide(slide: Slide, index: number) {

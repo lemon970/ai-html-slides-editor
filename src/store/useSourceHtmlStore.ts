@@ -28,18 +28,19 @@ function detectSlides(doc: Document): HTMLElement[] {
 }
 
 function injectListener(html: string): string {
-  const script = `<script>(function(){window.addEventListener('message',function(e){if(!e.data||e.data.__sls!==1)return;var d=e.data;if(d.type==='navigate'){if(window.__goTo){window.__goTo(d.index);}else{var ss=document.querySelectorAll('section.slide,.slide,[data-slide]');var nn=ss.length;if(!nn)return;var dk=document.getElementById('deck')||ss[0]&&ss[0].parentElement;if(dk)dk.style.transform='translateX('+(-(d.index*100/nn))+'%)';window.__currentSlideIndex=d.index;}return;}if(d.type==='updateText'){var slides=document.querySelectorAll('section.slide,.slide,[data-slide]');var slide=slides[d.si];if(!slide)return;var node=slide;for(var i=0;i<d.path.length;i++){var c=node.children[d.path[i]];if(!c)return;node=c;}node.textContent=d.value;}if(d.type==='updateVar'){document.documentElement.style.setProperty(d.name,d.value);}});})();<\/script>`;
+  const script = `<script>(function(){window.addEventListener('message',function(e){var d=e.data;if(!d||d.__sls!==1||typeof d.type!=='string')return;if(['navigate','updateText','updateVar'].indexOf(d.type)===-1)return;if(d.type==='navigate'){var idx=Number(d.index);if(!Number.isFinite(idx)||idx<0)return;if(window.__goTo){window.__goTo(idx);}else{var ss=document.querySelectorAll('section.slide,.slide,[data-slide]');var nn=ss.length;if(!nn)return;var dk=document.getElementById('deck')||ss[0]&&ss[0].parentElement;if(dk)dk.style.transform='translateX('+(-(idx*100/nn))+'%)';window.__currentSlideIndex=idx;}return;}if(d.type==='updateText'){if(!Array.isArray(d.path)||typeof d.value!=='string')return;var si=Number(d.si);if(!Number.isInteger(si)||si<0)return;var slides=document.querySelectorAll('section.slide,.slide,[data-slide]');var slide=slides[si];if(!slide)return;var node=slide;for(var i=0;i<d.path.length;i++){var pi=Number(d.path[i]);if(!Number.isInteger(pi)||pi<0)return;var c=node.children[pi];if(!c)return;node=c;}node.textContent=d.value;}if(d.type==='updateVar'){if(typeof d.name!=='string'||!/^--[a-z][a-z0-9-]*$/.test(d.name)||typeof d.value!=='string')return;document.documentElement.style.setProperty(d.name,d.value);}});})();<\/script>`;
   return html.includes("</body>") ? html.replace("</body>", script + "</body>") : html + script;
 }
 
 type SourceHtmlStore = {
   fileName: string;
+  notice: string | null;
   injectedHtml: string;
   doc: Document | null;
   slideElements: HTMLElement[];
   currentIndex: number;
   cssVars: Record<string, string>;
-  load: (html: string, fileName: string) => void;
+  load: (html: string, fileName: string, notice?: string | null) => void;
   setCurrentIndex: (i: number) => void;
   updateText: (slideIndex: number, path: number[], value: string) => void;
   updateCssVar: (name: string, value: string) => void;
@@ -49,19 +50,20 @@ type SourceHtmlStore = {
 
 export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
   fileName: "",
+  notice: null,
   injectedHtml: "",
   doc: null,
   slideElements: [],
   currentIndex: 0,
   cssVars: {},
 
-  load: (html, fileName) => {
+  load: (html, fileName, notice = null) => {
     const injectedHtml = injectListener(html);
     const doc =
       typeof window !== "undefined" ? new DOMParser().parseFromString(html, "text/html") : null;
     const slideElements = doc ? detectSlides(doc) : [];
     const cssVars = parseCssColorVars(html);
-    set({ fileName, injectedHtml, doc, slideElements, currentIndex: 0, cssVars });
+    set({ fileName, notice, injectedHtml, doc, slideElements, currentIndex: 0, cssVars });
   },
 
   setCurrentIndex: (i) => {
@@ -101,5 +103,5 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
     return doc ? "<!DOCTYPE html>\n" + doc.documentElement.outerHTML : "";
   },
 
-  reset: () => set({ fileName: "", injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {} }),
+  reset: () => set({ fileName: "", notice: null, injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {} }),
 }));

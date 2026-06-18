@@ -15,5 +15,7 @@ downloaded/
 .playwright-mcp/
 .codegraph/
 .cursor/
+.claude/
+对话历史.jsonl
 .next-dev.log
 .next-dev.err.log

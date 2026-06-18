@@ -65,6 +65,7 @@ export function ImportLanding() {
   const [convertTab, setConvertTab] = useState<"json" | "source">("json");
   const [copiedConvert, setCopiedConvert] = useState(false);
   const [draft, setDraft] = useState<ReturnType<typeof loadDraft>>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,7 +76,14 @@ export function ImportLanding() {
   async function handleHtml(html: string, fileName: string) {
     const mode = detectEditorMode(html);
     if (mode === "json") {
-      loadDeck(parseConstrainedHtml(html));
+      try {
+        loadDeck(parseConstrainedHtml(html));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "受约束 HTML 解析失败。";
+        setImportError(message);
+        loadSource(html, fileName, `完整编辑导入失败，已使用预览模式打开：${message}`);
+        setAppMode("source-html");
+      }
     } else if (mode === "source-html") {
       loadSource(html, fileName);
       setAppMode("source-html");
@@ -141,7 +149,10 @@ export function ImportLanding() {
     <div className="import-landing">
       {draft && (
         <div className="draft-banner">
-          <span>发现草稿（保存于 {relativeTime(draft.savedAt)}）</span>
+          <span>
+            发现草稿（保存于 {relativeTime(draft.savedAt)}）
+            {draft.assetStatus === "omitted" ? `，部分图片未保存（${draft.omittedAssetCount ?? 0} 项）` : ""}
+          </span>
           <div className="draft-banner-actions">
             <button
               type="button"
@@ -164,6 +175,7 @@ export function ImportLanding() {
         <div className="import-landing-logo">AI HTML Slides Editor</div>
         <h1 className="import-landing-title">导入 AI 生成的 HTML 演示文稿</h1>
         <p className="import-landing-sub">支持任意 AI HTML PPT · 自有结构 HTML · deck.json</p>
+        {importError ? <p className="import-error-text">完整编辑导入失败，已使用预览模式打开：{importError}</p> : null}
 
         <div
           className={`import-dropzone ${dragging ? "is-dragging" : ""}`}
