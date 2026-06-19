@@ -1,8 +1,10 @@
 "use client";
 
 import { create } from "zustand";
+import { nanoid } from "nanoid";
 import { annotateUids, detectSlides } from "@/core/annotation/uidAnnotation";
 import { applyPatches, type Patch } from "@/core/patches/patches";
+import { saveSourceDraft, type SourceDraft } from "@/core/persistence/sourceDraft";
 
 let _iframeNotify: ((msg: object) => void) | null = null;
 export function registerIframeNotify(fn: (msg: object) => void) { _iframeNotify = fn; }
@@ -11,6 +13,24 @@ export function notifyIframe(msg: object) { _iframeNotify?.(msg); }
 
 let _patchCounter = 0;
 export function nextPatchId() { return "p" + (++_patchCounter).toString(36); }
+
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutoSave() {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    const { draftId, fileName, sourceHtml, patches } = useSourceHtmlStore.getState();
+    if (!sourceHtml || typeof window === "undefined") return;
+    try {
+      await saveSourceDraft({
+        id: draftId,
+        title: fileName || "未命名演示文稿",
+        sourceHtml,
+        patches,
+        savedAt: new Date().toISOString(),
+      });
+    } catch { /* ignore persistence errors */ }
+  }, 1000);
+}
 
 function parseCssColorVars(html: string): Record<string, string> {
   const match = html.match(/:root\s*\{([^}]{0,3000})\}/);
@@ -47,7 +67,18 @@ document.addEventListener('click',function(e){
   return html.includes("</body>") ? html.replace("</body>", script + "</body>") : html + script;
 }
 
+function buildSessionState(html: string) {
+  const doc =
+    typeof window !== "undefined" ? new DOMParser().parseFromString(html, "text/html") : null;
+  const slideElements = doc ? detectSlides(doc) : [];
+  if (doc) annotateUids(slideElements);
+  const cssVars = parseCssColorVars(html);
+  const annotatedHtml = doc ? "<!DOCTYPE html>\n" + doc.documentElement.outerHTML : html;
+  return { doc, slideElements, cssVars, injectedHtml: injectListener(annotatedHtml) };
+}
+
 type SourceHtmlStore = {
+  draftId: string;
   fileName: string;
   notice: string | null;
   sourceHtml: string;
@@ -58,6 +89,7 @@ type SourceHtmlStore = {
   cssVars: Record<string, string>;
   patches: Patch[];
   load: (html: string, fileName: string, notice?: string | null) => void;
+  loadFromDraft: (draft: SourceDraft) => void;
   setCurrentIndex: (i: number) => void;
   appendPatch: (patch: Patch) => void;
   updateText: (slideIndex: number, pathIndices: number[], value: string) => void;
@@ -67,6 +99,7 @@ type SourceHtmlStore = {
 };
 
 export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
+  draftId: "",
   fileName: "",
   notice: null,
   sourceHtml: "",
@@ -78,14 +111,13 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
   patches: [],
 
   load: (html, fileName, notice = null) => {
-    const doc =
-      typeof window !== "undefined" ? new DOMParser().parseFromString(html, "text/html") : null;
-    const slideElements = doc ? detectSlides(doc) : [];
-    if (doc) annotateUids(slideElements);
-    const cssVars = parseCssColorVars(html);
-    const annotatedHtml = doc ? "<!DOCTYPE html>\n" + doc.documentElement.outerHTML : html;
-    const injectedHtml = injectListener(annotatedHtml);
-    set({ fileName, notice, sourceHtml: html, injectedHtml, doc, slideElements, currentIndex: 0, cssVars, patches: [] });
+    const session = buildSessionState(html);
+    set({ draftId: nanoid(8), fileName, notice, sourceHtml: html, patches: [], currentIndex: 0, ...session });
+  },
+
+  loadFromDraft: (draft) => {
+    const session = buildSessionState(draft.sourceHtml);
+    set({ draftId: draft.id, fileName: draft.title, notice: null, sourceHtml: draft.sourceHtml, patches: draft.patches, currentIndex: 0, ...session });
   },
 
   setCurrentIndex: (i) => {
@@ -93,7 +125,10 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
     notifyIframe({ __sls: 1, type: "navigate", index: i });
   },
 
-  appendPatch: (patch) => set((s) => ({ patches: [...s.patches, patch] })),
+  appendPatch: (patch) => {
+    set((s) => ({ patches: [...s.patches, patch] }));
+    scheduleAutoSave();
+  },
 
   updateText: (slideIndex, pathIndices, value) => {
     const { slideElements } = get();
@@ -129,7 +164,8 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
   },
 
   reset: () => {
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     _patchCounter = 0;
-    set({ fileName: "", notice: null, sourceHtml: "", injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {}, patches: [] });
+    set({ draftId: "", fileName: "", notice: null, sourceHtml: "", injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {}, patches: [] });
   },
 }));

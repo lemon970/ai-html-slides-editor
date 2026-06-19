@@ -6,6 +6,7 @@ import { parseConstrainedHtml } from "@/core/import/parseConstrainedHtml";
 import { PROMPT_TO_JSON_SCHEMA, PROMPT_TO_SOURCE_HTML } from "@/core/import/convertPrompts";
 import { deckSchema } from "@/core/schema/deck";
 import { loadDraft, clearDraft, type DraftPayload } from "@/core/persistence/draft";
+import { listSourceDrafts, loadSourceDraft, deleteSourceDraft, type SourceDraftMeta } from "@/core/persistence/sourceDraft";
 import { useDeckStore } from "@/store/useDeckStore";
 import { useSourceHtmlStore } from "@/store/useSourceHtmlStore";
 
@@ -57,6 +58,7 @@ export function ImportLanding() {
   const loadDeck = useDeckStore((s) => s.loadDeck);
   const setAppMode = useDeckStore((s) => s.setAppMode);
   const loadSource = useSourceHtmlStore((s) => s.load);
+  const loadFromDraft = useSourceHtmlStore((s) => s.loadFromDraft);
   const [dragging, setDragging] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -65,12 +67,14 @@ export function ImportLanding() {
   const [convertTab, setConvertTab] = useState<"json" | "source">("json");
   const [copiedConvert, setCopiedConvert] = useState(false);
   const [draft, setDraft] = useState<DraftPayload | null>(null);
+  const [sourceDrafts, setSourceDrafts] = useState<SourceDraftMeta[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadDraft().then(setDraft);
+    listSourceDrafts().then(setSourceDrafts);
   }, []);
 
   async function handleHtml(html: string, fileName: string) {
@@ -145,6 +149,18 @@ export function ImportLanding() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function openSourceDraft(id: string) {
+    const draft = await loadSourceDraft(id);
+    if (!draft) return;
+    loadFromDraft(draft);
+    setAppMode("source-html");
+  }
+
+  async function removeSourceDraft(id: string) {
+    await deleteSourceDraft(id);
+    setSourceDrafts((ds) => ds.filter((d) => d.id !== id));
+  }
+
   return (
     <div className="import-landing">
       {draft && (
@@ -200,6 +216,24 @@ export function ImportLanding() {
           </button>
         </div>
         <input ref={jsonInputRef} type="file" accept=".json,application/json" className="visually-hidden" onChange={onJsonChange} />
+
+        {sourceDrafts.length > 0 && (
+          <div className="src-draft-list">
+            <div className="src-draft-list-heading">最近草稿</div>
+            {sourceDrafts.map((d) => (
+              <div key={d.id} className="src-draft-item">
+                <div className="src-draft-info">
+                  <span className="src-draft-title">{d.title}</span>
+                  <span className="src-draft-meta">{d.patchCount} 处修改 · {relativeTime(d.savedAt)}</span>
+                </div>
+                <div className="src-draft-actions">
+                  <button type="button" className="import-btn-primary src-draft-open" onClick={() => openSourceDraft(d.id)}>打开</button>
+                  <button type="button" className="import-btn-secondary src-draft-del" onClick={() => removeSourceDraft(d.id)}>删除</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {showPrompt && (
           <div className="prompt-modal-overlay" onClick={() => setShowPrompt(false)}>
