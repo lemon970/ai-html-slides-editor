@@ -6,7 +6,7 @@ import { useDeckStore } from "@/store/useDeckStore";
 
 export function MediaPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const assets = useDeckStore((state) => state.deck.assets ?? []);
+  const assets = useDeckStore((state) => state.deck.assets) ?? [];
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
   const selectedElement = useDeckStore((state) => {
     const slide = state.deck.slides.find((item) => item.id === state.currentSlideId);
