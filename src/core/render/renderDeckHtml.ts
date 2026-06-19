@@ -2,6 +2,7 @@ import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
 import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { escapeHtml, renderCodeFallback, sanitizeHtml } from "@/core/render/safeHtml";
 import { slideBackgroundHtmlStyle, textHtmlStyle } from "@/core/style/css";
+import { collectKeyframes, entranceInlineStyle } from "@/core/render/animationStyles";
 
 function styleToString(style: Record<string, string | number | undefined>) {
   return Object.entries(style)
@@ -24,46 +25,37 @@ function baseElementStyle(element: SlideElement) {
   };
 }
 
-function renderElement(element: SlideElement) {
-  const dataAttrs = `data-element data-element-id="${escapeHtml(element.id)}" data-type="${element.type}"`;
+function renderElement(element: SlideElement): string {
+  const entrance = element.animations?.entrance;
+  const animAttr = entrance ? ` data-anim-entrance` : "";
+  const animStyle = entrance ? `;${entranceInlineStyle(entrance)}` : "";
+  const dataAttrs = `data-element data-element-id="${escapeHtml(element.id)}" data-type="${element.type}"${animAttr}`;
 
   if (element.type === "text") {
     const style = styleToString(textHtmlStyle(element));
-
-    return `<div ${dataAttrs} style="${style}">${escapeHtml(element.content)}</div>`;
+    return `<div ${dataAttrs} style="${style}${animStyle}">${escapeHtml(element.content)}</div>`;
   }
 
   if (element.type === "image") {
     const style = styleToString({
       ...baseElementStyle(element),
       background: element.style.background,
-      "border-radius": element.style.borderRadius
-        ? `${element.style.borderRadius}px`
-        : undefined,
+      "border-radius": element.style.borderRadius ? `${element.style.borderRadius}px` : undefined,
       "box-shadow": element.style.shadow,
       overflow: "hidden",
     });
-
-    return `<div ${dataAttrs} style="${style}"><img src="${escapeHtml(element.src)}" alt="${escapeHtml(element.alt ?? "")}" style="width:100%;height:100%;object-fit:${element.objectFit ?? "cover"};display:block;" /></div>`;
+    return `<div ${dataAttrs} style="${style}${animStyle}"><img src="${escapeHtml(element.src)}" alt="${escapeHtml(element.alt ?? "")}" style="width:100%;height:100%;object-fit:${element.objectFit ?? "cover"};display:block;" /></div>`;
   }
 
   if (element.type === "shape") {
     const style = styleToString({
       ...baseElementStyle(element),
       background: element.style.fill,
-      border: element.style.stroke
-        ? `${element.style.strokeWidth ?? 1}px solid ${element.style.stroke}`
-        : undefined,
-      "border-radius":
-        element.shape === "ellipse"
-          ? "9999px"
-          : element.style.borderRadius
-            ? `${element.style.borderRadius}px`
-            : undefined,
+      border: element.style.stroke ? `${element.style.strokeWidth ?? 1}px solid ${element.style.stroke}` : undefined,
+      "border-radius": element.shape === "ellipse" ? "9999px" : element.style.borderRadius ? `${element.style.borderRadius}px` : undefined,
       "box-shadow": element.style.shadow,
     });
-
-    return `<div ${dataAttrs} data-shape="${element.shape}" style="${style}"></div>`;
+    return `<div ${dataAttrs} data-shape="${element.shape}" style="${style}${animStyle}"></div>`;
   }
 
   const style = styleToString(baseElementStyle(element));
@@ -72,7 +64,7 @@ function renderElement(element: SlideElement) {
     : element.trustedHtml
       ? element.html
       : sanitizeHtml(element.html);
-  return `<div ${dataAttrs} style="${style}">${html}</div>`;
+  return `<div ${dataAttrs} style="${style}${animStyle}">${html}</div>`;
 }
 
 function renderSlide(slide: Slide, index: number) {
@@ -88,6 +80,20 @@ export function renderSlideForExport(slide: Slide): { innerHtml: string; backgro
 export function renderDeckHtml(deck: Deck) {
   const slides = deck.slides.map(renderSlide).join("\n");
   const deckJson = JSON.stringify(deck).replaceAll("<", "\\u003c");
+
+  // Collect entrance animation types used across all slides
+  const entranceTypes: string[] = [];
+  for (const slide of deck.slides) {
+    for (const el of slide.elements) {
+      if (el.animations?.entrance) entranceTypes.push(el.animations.entrance.type);
+    }
+  }
+  const keyframesCSS = entranceTypes.length > 0 ? `\n    ${collectKeyframes(entranceTypes)}` : "";
+
+  // IntersectionObserver script: play entrance animations when slide scrolls into view
+  const animScript = entranceTypes.length > 0
+    ? `\n  <script>(function(){var io=new IntersectionObserver(function(entries){entries.forEach(function(e){if(!e.isIntersecting)return;e.target.querySelectorAll('[data-anim-entrance]').forEach(function(el){el.style.animationPlayState='running';});});},{threshold:0.2});document.querySelectorAll('.slide[data-slide]').forEach(function(s){io.observe(s);});})();</script>`
+    : "";
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -105,7 +111,7 @@ export function renderDeckHtml(deck: Deck) {
       .slide[data-slide] { width: min(94vw, ${deck.size.width}px); height: auto; aspect-ratio: ${deck.size.width} / ${deck.size.height}; }
       .slide[data-slide] > [data-element] { transform-origin: top left; }
     }
-    img { max-width: 100%; }
+    img { max-width: 100%; }${keyframesCSS}
   </style>
 </head>
 <body>
@@ -114,7 +120,7 @@ ${slides}
   </main>
   <script>
     window.__DECK_JSON__ = ${deckJson};
-  </script>
+  </script>${animScript}
 </body>
 </html>`;
 }

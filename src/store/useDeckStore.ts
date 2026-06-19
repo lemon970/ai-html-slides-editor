@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { demoDeck } from "@/data/demoDeck";
-import type { Deck, Slide, SlideBackground, SlideElement } from "@/core/schema/deck";
+import type { Deck, Slide, SlideBackground, SlideElement, SlideTransition } from "@/core/schema/deck";
 import {
   executeEditorCommand,
   primaryElementIdForCommand,
@@ -22,7 +22,7 @@ import {
   updateElement,
   updateElements,
 } from "@/core/ops/deckOperations";
-import { updateSlideBackground } from "@/core/ops/slideOperations";
+import { updateSlideBackground, updateSlideNotes, updateSlideTransition } from "@/core/ops/slideOperations";
 import type { DeckHistory } from "@/core/ops/history";
 import { pushHistory, redoHistory, undoHistory } from "@/core/ops/history";
 import {
@@ -80,6 +80,8 @@ type DeckStore = {
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   updateCurrentSlideBackground: (background: SlideBackground) => void;
+  updateCurrentSlideNotes: (notes: string) => void;
+  updateCurrentSlideTransition: (transition: SlideTransition | undefined) => void;
   alignSelectedElements: (axis: AlignAxis) => void;
   distributeSelectedElements: (axis: "horizontal" | "vertical") => void;
   addSlide: (afterId?: string) => void;
@@ -315,11 +317,15 @@ export const useDeckStore = create<DeckStore>()((set, get) => ({
   updateCurrentSlideBackground: (background) => {
     const state = get();
     const nextDeck = updateSlideBackground(state.deck, state.currentSlideId, background);
-    set({
-      deck: nextDeck,
-      history: pushHistory(state.history, state.deck),
-      error: null,
-    });
+    set({ deck: nextDeck, history: pushHistory(state.history, state.deck), error: null });
+  },
+  updateCurrentSlideNotes: (notes) => {
+    const state = get();
+    set({ deck: updateSlideNotes(state.deck, state.currentSlideId, notes), history: pushHistory(state.history, state.deck), error: null });
+  },
+  updateCurrentSlideTransition: (transition) => {
+    const state = get();
+    set({ deck: updateSlideTransition(state.deck, state.currentSlideId, transition), history: pushHistory(state.history, state.deck), error: null });
   },
   addSlide: (afterId) => {
     const state = get();

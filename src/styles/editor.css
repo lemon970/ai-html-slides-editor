@@ -1658,3 +1658,125 @@
   outline: none;
   tab-size: 2;
 }
+
+
+/* ── Presentation mode (iter-9) ─────────────────────────────────────── */
+.presentation-progress-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: rgba(255,255,255,0.12);
+  z-index: 10002;
+}
+.presentation-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.35s ease;
+}
+.presentation-slide-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Transition animations (keyed by slide.transition.type) */
+.pres-trans-fade   { animation: pres-fade   var(--pres-dur, 0.4s) ease; }
+.pres-trans-slide  { animation: pres-slide  var(--pres-dur, 0.4s) ease; }
+.pres-trans-push   { animation: pres-push   var(--pres-dur, 0.4s) ease; }
+@keyframes pres-fade  { from { opacity: 0 }                               to { opacity: 1 } }
+@keyframes pres-slide { from { opacity: 0; translate: 60px 0 }            to { opacity: 1; translate: none } }
+@keyframes pres-push  { from { opacity: 0; translate: 0 30px; scale:0.98 } to { opacity: 1; translate: none; scale: 1 } }
+
+.presentation-notes {
+  position: fixed;
+  bottom: 64px; left: 50%;
+  transform: translateX(-50%);
+  width: min(700px, 90vw);
+  background: rgba(15,23,42,0.92);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  z-index: 10001;
+  backdrop-filter: blur(8px);
+}
+.pres-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #94a3b8;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* ── Animation section (iter-9) ─────────────────────────────────────── */
+.anim-phase {
+  margin-bottom: 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.anim-phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--c-bg-2);
+}
+.anim-phase-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text);
+  flex: 1;
+}
+.anim-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.anim-preview-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--c-accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.anim-def-fields {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Notes textarea (iter-9) ─────────────────────────────────────────── */
+.notes-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  background: var(--c-bg-2);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+.notes-textarea:focus { outline: none; border-color: var(--c-accent); }
+
+/* ── Keyframes available in editor (for preview) ─────────────────────── */
+@keyframes anim-fade       { from { opacity:0 }                                    to { opacity:1 } }
+@keyframes anim-slide-up   { from { opacity:0; translate:0 40px }                  to { opacity:1; translate:none } }
+@keyframes anim-slide-down { from { opacity:0; translate:0 -40px }                 to { opacity:1; translate:none } }
+@keyframes anim-slide-left { from { opacity:0; translate:40px 0 }                  to { opacity:1; translate:none } }
+@keyframes anim-slide-right{ from { opacity:0; translate:-40px 0 }                 to { opacity:1; translate:none } }
+@keyframes anim-scale      { from { opacity:0; scale:0.7 }                         to { opacity:1; scale:none } }
+@keyframes anim-zoom-in    { from { opacity:0; scale:1.2 }                         to { opacity:1; scale:none } }
+@keyframes anim-spin       { from { opacity:0; rotate:-90deg; scale:0.8 }          to { opacity:1; rotate:0deg; scale:none } }

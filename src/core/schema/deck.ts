@@ -56,6 +56,34 @@ export const shapeStyleSchema = z.object({
   shadow: z.string().optional(),
 });
 
+// ── Animation schemas ──────────────────────────────────────────────────────
+
+export const animationTypeSchema = z.enum([
+  "fade", "slide-up", "slide-down", "slide-left", "slide-right", "scale", "zoom-in", "spin",
+]);
+
+export const animationDefSchema = z.object({
+  type: animationTypeSchema,
+  duration: z.number().positive().default(0.6),
+  delay: z.number().min(0).default(0),
+  easing: z.enum(["ease", "ease-in", "ease-out", "ease-in-out", "linear"]).default("ease-out"),
+});
+
+export const elementAnimationsSchema = z.object({
+  entrance: animationDefSchema.optional(),
+  exit: animationDefSchema.optional(),
+  emphasis: animationDefSchema.optional(),
+});
+
+// ── Transition schema ──────────────────────────────────────────────────────
+
+export const slideTransitionSchema = z.object({
+  type: z.enum(["none", "fade", "slide", "push"]).default("fade"),
+  duration: z.number().positive().default(0.4),
+});
+
+// ── Element schemas ────────────────────────────────────────────────────────
+
 const baseElementSchema = z.object({
   id: z.string().min(1),
   name: z.string().optional(),
@@ -71,6 +99,7 @@ const baseElementSchema = z.object({
   zIndex: z.number().optional(),
   minW: z.number().positive().optional(),
   minH: z.number().positive().optional(),
+  animations: elementAnimationsSchema.optional(),
 });
 
 export const textElementSchema = baseElementSchema.extend({
@@ -128,6 +157,7 @@ export const slideSchema = z.object({
   background: slideBackgroundSchema,
   elements: z.array(slideElementSchema),
   notes: z.string().optional(),
+  transition: slideTransitionSchema.optional(),
 });
 
 export const themeSchema = z.object({
@@ -169,3 +199,6 @@ export type ElementType = SlideElement["type"];
 export type ElementPatch = Partial<SlideElement> & {
   style?: Record<string, unknown>;
 };
+export type AnimationDef = z.infer<typeof animationDefSchema>;
+export type ElementAnimations = z.infer<typeof elementAnimationsSchema>;
+export type SlideTransition = z.infer<typeof slideTransitionSchema>;
