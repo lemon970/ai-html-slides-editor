@@ -69,8 +69,10 @@ export function ElementRenderer({
   }
 
   if (element.type === "image") {
+    const c = element.style.clip;
+    const clipPath = c && (c.top || c.right || c.bottom || c.left) ? `inset(${c.top}% ${c.right}% ${c.bottom}% ${c.left}%)` : undefined;
     return (
-      <div {...commonProps} style={{ ...baseStyle(element), background: element.style.background, borderRadius: element.style.borderRadius, boxShadow: element.style.shadow, overflow: "hidden" }}>
+      <div {...commonProps} style={{ ...baseStyle(element), background: element.style.background, borderRadius: element.style.borderRadius, boxShadow: element.style.shadow, clipPath, overflow: "hidden" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={element.src} alt={element.alt ?? ""} style={{ objectFit: element.objectFit }} />
       </div>

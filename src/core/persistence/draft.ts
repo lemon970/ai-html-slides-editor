@@ -1,80 +1,47 @@
 import { deckSchema, type Deck } from "@/core/schema/deck";
+import { idbGet, idbPut, idbDelete } from "./idb";
 
 const DRAFT_KEY = "htmlppts_draft";
-const MAX_BYTES = 4 * 1024 * 1024;
+const TTL_MS = 24 * 60 * 60 * 1000;
 
 export type DraftPayload = {
   deck: Deck;
   currentSlideId: string;
   savedAt: string;
-  assetStatus?: "complete" | "omitted";
-  omittedAssetCount?: number;
 };
 
-export function saveDraft(deck: Deck, currentSlideId: string): void {
+export async function saveDraft(deck: Deck, currentSlideId: string): Promise<void> {
+  const payload: DraftPayload = { deck, currentSlideId, savedAt: new Date().toISOString() };
   try {
-    let payload: DraftPayload = { deck, currentSlideId, savedAt: new Date().toISOString() };
-    let serialized = JSON.stringify(payload);
-
-    if (serialized.length > MAX_BYTES) {
-      let omittedAssetCount = 0;
-      const stripped: Deck = {
-        ...deck,
-        slides: deck.slides.map((s) => ({
-          ...s,
-          elements: s.elements.map((el) =>
-            el.type === "image"
-              ? (omittedAssetCount += 1, { ...el, src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E", assetStatus: "omitted" } as typeof el)
-              : el,
-          ),
-        })),
-        assets: deck.assets?.map((asset) => {
-          omittedAssetCount += 1;
-          return {
-            ...asset,
-            src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'%3E%3C/svg%3E",
-          };
-        }),
-      };
-      payload = {
-        deck: stripped,
-        currentSlideId,
-        savedAt: new Date().toISOString(),
-        assetStatus: "omitted",
-        omittedAssetCount,
-      };
-      serialized = JSON.stringify(payload);
-    }
-
-    localStorage.setItem(DRAFT_KEY, serialized);
+    await idbPut(DRAFT_KEY, payload);
   } catch {
-    // quota exceeded or unavailable — silent fail
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)); } catch { /* ignore */ }
   }
 }
 
-export function loadDraft(): DraftPayload | null {
-  try {
+export async function loadDraft(): Promise<DraftPayload | null> {
+  let data: DraftPayload | undefined;
+
+  try { data = (await idbGet(DRAFT_KEY)) as DraftPayload | undefined; } catch { /* IDB unavailable */ }
+
+  if (!data) {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as DraftPayload;
-    if (!data.deck || !data.savedAt) return null;
-    const parsed = deckSchema.safeParse(data.deck);
-    if (!parsed.success) return null;
-    const age = Date.now() - new Date(data.savedAt).getTime();
-    if (age > 24 * 60 * 60 * 1000) {
-      clearDraft();
-      return null;
+    if (raw) {
+      try {
+        data = JSON.parse(raw) as DraftPayload;
+        try { await idbPut(DRAFT_KEY, data); localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+      } catch { /* parse error */ }
     }
-    return { ...data, deck: parsed.data };
-  } catch {
-    return null;
   }
+
+  if (!data?.deck || !data.savedAt) return null;
+  if (Date.now() - new Date(data.savedAt).getTime() > TTL_MS) { await clearDraft(); return null; }
+  const parsed = deckSchema.safeParse(data.deck);
+  if (!parsed.success) return null;
+  return { ...data, deck: parsed.data };
 }
 
-export function clearDraft(): void {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {
-    // ignore
-  }
+export async function clearDraft(): Promise<void> {
+  try { await idbDelete(DRAFT_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }

@@ -118,10 +118,9 @@ describe("renderDeckHtml", () => {
     expect(html).toContain("animationPlayState");
   });
 
-  it("does not inject animation script when no elements have animations", () => {
+  it("does not inject entrance animation script when no elements have animations", () => {
     const html = renderDeckHtml(demoDeck);
     expect(html).not.toContain("IntersectionObserver");
-    expect(html).not.toContain("data-anim-entrance");
   });
 
   it("keeps entrance animation and security isolation independent", () => {

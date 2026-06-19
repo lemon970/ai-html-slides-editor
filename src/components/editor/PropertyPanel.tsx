@@ -7,6 +7,7 @@ import { useDeckStore } from "@/store/useDeckStore";
 import { AnimationSection } from "./inspectors/AnimationSection";
 import { BackgroundSection } from "./inspectors/BackgroundSection";
 import { BorderSection } from "./inspectors/BorderSection";
+import { ClipSection } from "./inspectors/ClipSection";
 import { FillSection } from "./inspectors/FillSection";
 import { InspectorSection, Field, SegmentedControl } from "./inspectors/InspectorFields";
 import { LayoutSection } from "./inspectors/LayoutSection";
@@ -37,6 +38,9 @@ export function PropertyPanel() {
   const slide = deck.slides.find((item) => item.id === currentSlideId) ?? deck.slides[0];
   const zValues = slide.elements.map((item) => item.zIndex ?? 0);
   const zRange = { min: Math.min(...zValues, 0), max: Math.max(...zValues, 0) };
+  const [notesValue, setNotesValue] = useState(slide.notes ?? "");
+  useEffect(() => { setNotesValue(slide.notes ?? ""); }, [slide.id]);
+
   const [isTextOverflowing, setIsTextOverflowing] = useState(false);
   const elementTypeLabel = { text: "文本", image: "图片", shape: "形状", html: "HTML" } as const;
 
@@ -73,8 +77,9 @@ export function PropertyPanel() {
             <textarea
               className="notes-textarea"
               placeholder="在此输入演讲者备注（仅在演示模式中显示）…"
-              value={slide.notes ?? ""}
-              onChange={(e) => updateCurrentSlideNotes(e.target.value)}
+              value={notesValue}
+              onChange={(e) => setNotesValue(e.target.value)}
+              onBlur={(e) => { if (e.target.value !== (slide.notes ?? "")) updateCurrentSlideNotes(e.target.value); }}
             />
           </InspectorSection>
           <InspectorSection title="页面转场">
@@ -123,6 +128,7 @@ export function PropertyPanel() {
           {element.type === "image" ? (
             <>
               <FillSection element={element} onElementChange={updateSelectedElement as (patch: Partial<ImageElement>) => void} onStyleChange={updateStyle} />
+              <ClipSection element={element as ImageElement} onUpdate={updateSelectedElement as (patch: Partial<ImageElement>) => void} />
               <BorderSection element={element} onStyleChange={updateStyle} />
               <ShadowSection element={element} onStyleChange={updateStyle} />
             </>

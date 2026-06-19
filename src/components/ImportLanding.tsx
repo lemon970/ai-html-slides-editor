@@ -5,7 +5,7 @@ import { detectEditorMode } from "@/core/import/detectSourceHtmlMode";
 import { parseConstrainedHtml } from "@/core/import/parseConstrainedHtml";
 import { PROMPT_TO_JSON_SCHEMA, PROMPT_TO_SOURCE_HTML } from "@/core/import/convertPrompts";
 import { deckSchema } from "@/core/schema/deck";
-import { loadDraft, clearDraft } from "@/core/persistence/draft";
+import { loadDraft, clearDraft, type DraftPayload } from "@/core/persistence/draft";
 import { useDeckStore } from "@/store/useDeckStore";
 import { useSourceHtmlStore } from "@/store/useSourceHtmlStore";
 
@@ -64,13 +64,13 @@ export function ImportLanding() {
   const [showConvert, setShowConvert] = useState(false);
   const [convertTab, setConvertTab] = useState<"json" | "source">("json");
   const [copiedConvert, setCopiedConvert] = useState(false);
-  const [draft, setDraft] = useState<ReturnType<typeof loadDraft>>(null);
+  const [draft, setDraft] = useState<DraftPayload | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setDraft(loadDraft());
+    loadDraft().then(setDraft);
   }, []);
 
   async function handleHtml(html: string, fileName: string) {
@@ -151,7 +151,6 @@ export function ImportLanding() {
         <div className="draft-banner">
           <span>
             发现草稿（保存于 {relativeTime(draft.savedAt)}）
-            {draft.assetStatus === "omitted" ? `，部分图片未保存（${draft.omittedAssetCount ?? 0} 项）` : ""}
           </span>
           <div className="draft-banner-actions">
             <button

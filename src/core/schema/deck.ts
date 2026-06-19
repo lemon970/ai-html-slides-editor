@@ -120,6 +120,14 @@ export const imageElementSchema = baseElementSchema.extend({
       borderRadius: z.number().min(0).optional(),
       shadow: z.string().optional(),
       background: z.string().optional(),
+      clip: z
+        .object({
+          top: z.number().min(0).max(50).default(0),
+          right: z.number().min(0).max(50).default(0),
+          bottom: z.number().min(0).max(50).default(0),
+          left: z.number().min(0).max(50).default(0),
+        })
+        .optional(),
     })
     .optional()
     .default({}),

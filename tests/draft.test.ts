@@ -1,64 +1,55 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { demoDeck } from "@/data/demoDeck";
 import { clearDraft, loadDraft, saveDraft } from "@/core/persistence/draft";
 
 describe("draft persistence", () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.restoreAllMocks();
   });
 
-  it("loads valid drafts through the deck schema", () => {
+  it("loads valid drafts through the deck schema", async () => {
     const deck = structuredClone(demoDeck);
-    saveDraft(deck, deck.slides[0].id);
+    await saveDraft(deck, deck.slides[0].id);
 
-    const draft = loadDraft();
+    const draft = await loadDraft();
 
     expect(draft?.deck.id).toBe(deck.id);
     expect(draft?.currentSlideId).toBe(deck.slides[0].id);
   });
 
-  it("returns null for invalid draft data", () => {
+  it("returns null for invalid draft data", async () => {
     localStorage.setItem("htmlppts_draft", JSON.stringify({
       savedAt: new Date().toISOString(),
       currentSlideId: "slide-1",
       deck: { version: "0.1", slides: [] },
     }));
 
-    expect(loadDraft()).toBeNull();
+    expect(await loadDraft()).toBeNull();
   });
 
-  it("marks omitted image assets instead of writing a fake normal src", () => {
-    const realStringify = JSON.stringify;
+  it("saves deck content without size-based omission", async () => {
     const deck = structuredClone(demoDeck);
+    const longSrc = `data:image/png;base64,${"a".repeat(2048)}`;
     deck.slides[0].elements.push({
       id: "large-image",
       type: "image",
-      src: `data:image/png;base64,${"a".repeat(1024)}`,
-      x: 0,
-      y: 0,
-      w: 100,
-      h: 100,
+      src: longSrc,
+      x: 0, y: 0, w: 100, h: 100,
       style: {},
     });
-    vi.spyOn(JSON, "stringify")
-      .mockReturnValueOnce("x".repeat(4 * 1024 * 1024 + 1))
-      .mockImplementation((value) => realStringify(value));
 
-    saveDraft(deck, deck.slides[0].id);
-    const draft = loadDraft();
+    await saveDraft(deck, deck.slides[0].id);
+    const draft = await loadDraft();
     const image = draft?.deck.slides[0].elements.find((el) => el.id === "large-image");
 
-    expect(draft?.assetStatus).toBe("omitted");
-    expect(draft?.omittedAssetCount).toBeGreaterThan(0);
-    expect(image).toMatchObject({ type: "image", assetStatus: "omitted" });
-    expect(image && image.type === "image" ? image.src : "").not.toBe("[omitted]");
+    expect(image).toBeDefined();
+    expect(image?.type === "image" ? image.src : "").toBe(longSrc);
   });
 
-  it("clears drafts", () => {
-    saveDraft(demoDeck, demoDeck.slides[0].id);
-    clearDraft();
+  it("clears drafts", async () => {
+    await saveDraft(demoDeck, demoDeck.slides[0].id);
+    await clearDraft();
 
-    expect(loadDraft()).toBeNull();
+    expect(await loadDraft()).toBeNull();
   });
 });

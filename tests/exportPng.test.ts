@@ -4,13 +4,13 @@ import { assertDeckRasterExportable } from "@/core/export/preflight";
 import { canvasToPngBlob } from "@/core/export/exportPng";
 
 describe("raster export preflight", () => {
-  it("rejects omitted image data before raster export", () => {
+  it("proceeds normally when image has assetStatus omitted (no longer blocked)", () => {
     const deck = structuredClone(demoDeck);
     const image = deck.slides[0].elements.find((element) => element.id === "cover-image");
     if (!image || image.type !== "image") throw new Error("Expected cover image.");
     image.assetStatus = "omitted";
 
-    expect(() => assertDeckRasterExportable(deck)).toThrow("未保存图片数据");
+    expect(() => assertDeckRasterExportable(deck)).not.toThrow();
   });
 
   it("rejects null toBlob results", async () => {

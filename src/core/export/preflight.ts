@@ -34,9 +34,6 @@ function assertElement(element: SlideElement, slideIndex: number) {
   if (element.type !== "image") {
     return;
   }
-  if (element.assetStatus === "omitted") {
-    throw new Error(`第 ${slideIndex + 1} 页图片「${element.name ?? element.id}」未保存图片数据，无法导出。`);
-  }
   assertImageSource(element.src, `第 ${slideIndex + 1} 页图片「${element.name ?? element.id}」`);
 }
 
