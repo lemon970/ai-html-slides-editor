@@ -21,6 +21,7 @@ export function SourceHtmlPreview() {
         { __sls: 1, type: "navigate", index: currentIndex },
         "*",
       );
+      useSourceHtmlStore.getState().replayPatches();
     }, 500);
   }
 

@@ -95,6 +95,7 @@ type SourceHtmlStore = {
   updateText: (slideIndex: number, pathIndices: number[], value: string) => void;
   updateCssVar: (name: string, value: string) => void;
   serialize: () => string;
+  replayPatches: () => void;
   reset: () => void;
 };
 
@@ -161,6 +162,13 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
   serialize: () => {
     const { sourceHtml, patches } = get();
     return applyPatches(sourceHtml, patches).html;
+  },
+
+  replayPatches: () => {
+    for (const p of get().patches) {
+      if (p.type === "text" && p.target.uid)
+        notifyIframe({ __sls: 1, type: "applyTextPatch", eid: p.target.uid, value: p.value });
+    }
   },
 
   reset: () => {
