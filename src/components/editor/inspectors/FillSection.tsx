@@ -82,9 +82,9 @@ export function FillSection({ element, onElementChange, onStyleChange }: FillSec
                 })
               }
             >
-              <option value="cover">cover</option>
-              <option value="contain">contain</option>
-              <option value="fill">fill</option>
+              <option value="cover">填满裁切</option>
+              <option value="contain">完整显示</option>
+              <option value="fill">拉伸填充</option>
             </select>
           </Field>
         </>

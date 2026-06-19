@@ -13,7 +13,7 @@ export function ResizeHandle({ handle, onPointerDown }: ResizeHandleProps) {
     <button
       type="button"
       className={`resize-handle resize-handle-${handle}`}
-      aria-label={`Resize ${handle}`}
+      aria-label={`调整大小 ${handle}`}
       onPointerDown={(event) => onPointerDown(event, handle)}
     />
   );

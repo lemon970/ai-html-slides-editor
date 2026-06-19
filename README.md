@@ -38,3 +38,7 @@ pnpm dev
 - `docs/refinement-system-roadmap.md`：第二阶段精细化编辑系统计划。
 - `docs/next-iteration-intelligent-expansion.md`：本地优先、个人可部署工具路线。
 - `docs/practical-usability-iteration-plan.md`：下一轮实用性与易用性增强计划。
+- `docs/editor-gap-backlog.md`：编辑器能力缺口留档。
+- `docs/usability-media-iteration-plan.md`：编辑逻辑收口与媒体能力增强计划。
+- `docs/iteration-8-plan.md`：可靠性收口、导出安全与媒体资源地基计划。
+- `docs/iteration-9-plan.md`：演示与动效收口（动画系统 + 转场 + 演讲者备注 + 演示增强）计划。

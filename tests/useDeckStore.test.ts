@@ -50,7 +50,88 @@ describe("useDeckStore selection state", () => {
     ).toBeUndefined();
     expect(
       ungroupedDeck.slides[0].elements.find((element) => element.id === "cover-subtitle")
-        ?.groupId,
+      ?.groupId,
     ).toBeUndefined();
+  });
+
+  it("toggles locked and hidden element state", () => {
+    useDeckStore.getState().toggleElementLocked("cover-title");
+    expect(
+      useDeckStore
+        .getState()
+        .deck.slides[0].elements.find((element) => element.id === "cover-title")?.locked,
+    ).toBe(true);
+
+    useDeckStore.getState().selectElement("cover-title");
+    useDeckStore.getState().toggleElementHidden("cover-title");
+
+    const hiddenTitle = useDeckStore
+      .getState()
+      .deck.slides[0].elements.find((element) => element.id === "cover-title");
+    expect(hiddenTitle?.hidden).toBe(true);
+    expect(useDeckStore.getState().selectedElementIds).toEqual([]);
+  });
+
+  it("deletes selected unlocked elements and keeps locked elements", () => {
+    useDeckStore.getState().toggleElementLocked("cover-title");
+    useDeckStore.getState().selectElements(["cover-title", "cover-subtitle"]);
+    useDeckStore.getState().deleteSelectedElements();
+
+    const elements = useDeckStore.getState().deck.slides[0].elements;
+    expect(elements.some((element) => element.id === "cover-title")).toBe(true);
+    expect(elements.some((element) => element.id === "cover-subtitle")).toBe(false);
+    expect(useDeckStore.getState().selectedElementIds).toEqual([]);
+  });
+
+  it("copies, pastes, and selects duplicated elements", () => {
+    useDeckStore.getState().selectElements(["cover-title", "cover-subtitle"]);
+    useDeckStore.getState().copySelectedElements();
+    useDeckStore.getState().pasteElements();
+
+    const state = useDeckStore.getState();
+    expect(state.selectedElementIds).toHaveLength(2);
+    expect(state.selectedElementIds).not.toContain("cover-title");
+    expect(state.deck.slides[0].elements).toHaveLength(demoDeck.slides[0].elements.length + 2);
+  });
+
+  it("nudges selected elements while ignoring locked elements", () => {
+    const originalTitle = demoDeck.slides[0].elements.find((element) => element.id === "cover-title");
+    const originalSubtitle = demoDeck.slides[0].elements.find(
+      (element) => element.id === "cover-subtitle",
+    );
+    if (!originalTitle || !originalSubtitle) {
+      throw new Error("Expected demo elements.");
+    }
+
+    useDeckStore.getState().toggleElementLocked("cover-title");
+    useDeckStore.getState().selectElements(["cover-title", "cover-subtitle"]);
+    useDeckStore.getState().nudgeSelectedElements({ x: 10, y: 1 });
+
+    const elements = useDeckStore.getState().deck.slides[0].elements;
+    expect(elements.find((element) => element.id === "cover-title")).toMatchObject({
+      x: originalTitle.x,
+      y: originalTitle.y,
+    });
+    expect(elements.find((element) => element.id === "cover-subtitle")).toMatchObject({
+      x: originalSubtitle.x + 10,
+      y: originalSubtitle.y + 1,
+    });
+  });
+
+  it("adds an imported image element to the current slide and selects it", () => {
+    useDeckStore.getState().addImageElement("data:image/png;base64,abc", "cover.png");
+
+    const state = useDeckStore.getState();
+    const image = state.deck.slides[0].elements.find(
+      (element) => element.id === state.selectedElementId,
+    );
+
+    expect(image).toMatchObject({
+      type: "image",
+      src: "data:image/png;base64,abc",
+      name: "cover.png",
+      objectFit: "cover",
+    });
+    expect(state.selectedElementIds).toEqual([state.selectedElementId]);
   });
 });

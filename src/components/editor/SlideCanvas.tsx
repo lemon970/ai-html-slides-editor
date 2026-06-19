@@ -1,11 +1,15 @@
 "use client";
 
-import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ElementRenderer } from "./ElementRenderer";
 import { TransformBox } from "./controls/TransformBox";
+import { fileToDataUrl, imageAccept } from "@/core/assets/imageDataUrl";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import type { EditorCommand } from "@/core/commands/editorCommands";
 import type { Deck, Slide, SlideElement } from "@/core/schema/deck";
-import { sortElements } from "@/core/ops/deckOperations";
+import { sortElements, visibleElements } from "@/core/ops/deckOperations";
 import { boundsFromElements, elementBounds, type Bounds } from "@/core/geometry/bounds";
+import { snapPosition, type SnapGuide } from "@/core/geometry/snap";
 import {
   moveBounds,
   resizeBounds,
@@ -17,11 +21,13 @@ import { elementIdsForGroup, shouldSelectWholeGroup } from "@/core/selection/gro
 import { elementIdsInMarquee } from "@/core/selection/selectionOperations";
 import { slideBackgroundReactStyle } from "@/core/style/css";
 import { useDeckStore } from "@/store/useDeckStore";
+import { CodeEditModal } from "./CodeEditModal";
 
 type SlideCanvasProps = {
   slide: Slide;
   deckSize: Deck["size"];
   mode: "editable" | "thumbnail";
+  showGrid?: boolean;
 };
 
 type DragState = {
@@ -85,25 +91,47 @@ function withPreviewPatch(element: SlideElement, patch: Partial<SlideElement> | 
   return patch ? ({ ...element, ...patch } as SlideElement) : element;
 }
 
-export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
+export function SlideCanvas({ slide, deckSize, mode, showGrid = false }: SlideCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const selectedElementId = useDeckStore((state) => state.selectedElementId);
   const selectedElementIds = useDeckStore((state) => state.selectedElementIds);
+  const clipboardElementIds = useDeckStore((state) => state.clipboardElementIds);
   const selectElement = useDeckStore((state) => state.selectElement);
   const selectElements = useDeckStore((state) => state.selectElements);
   const toggleElementSelection = useDeckStore((state) => state.toggleElementSelection);
   const clearSelection = useDeckStore((state) => state.clearSelection);
   const updateElementsById = useDeckStore((state) => state.updateElementsById);
+  const executeCommand = useDeckStore((state) => state.executeCommand);
+  const addImageElement = useDeckStore((state) => state.addImageElement);
+  const addTextElement = useDeckStore((state) => state.addTextElement);
+  const addShapeElement = useDeckStore((state) => state.addShapeElement);
+  const setError = useDeckStore((state) => state.setError);
+  const duplicateSelectedElements = useDeckStore((state) => state.duplicateSelectedElements);
+  const deleteSelectedElements = useDeckStore((state) => state.deleteSelectedElements);
+  const toggleElementLocked = useDeckStore((state) => state.toggleElementLocked);
+  const toggleElementHidden = useDeckStore((state) => state.toggleElementHidden);
+  const updateElementById = useDeckStore((state) => state.updateElementById);
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [editingCodeElement, setEditingCodeElement] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [previewPatches, setPreviewPatches] = useState<PreviewPatches>({});
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  } | null>(null);
   const [scale, setScale] = useState(1);
+  const [snapGuides, setSnapGuides] = useState<SnapGuide[]>([]);
   const elements = useMemo(() => sortElements(slide.elements), [slide.elements]);
+  const renderElements = useMemo(() => visibleElements(elements), [elements]);
   const selectedElement = selectedElementId
     ? elements.find((element) => element.id === selectedElementId)
     : null;
+  const selectedElementVisible = Boolean(selectedElement && !selectedElement.hidden);
   const selectedElements = useMemo(
-    () => elements.filter((element) => selectedElementIds.includes(element.id)),
-    [elements, selectedElementIds],
+    () => renderElements.filter((element) => selectedElementIds.includes(element.id)),
+    [renderElements, selectedElementIds],
   );
   const selectedFrame = useMemo(() => boundsFromElements(selectedElements), [selectedElements]);
   const previewSelectedFrame = useMemo(
@@ -113,7 +141,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       ),
     [previewPatches, selectedElements],
   );
-  const canTransformSingleElement = selectedElementIds.length === 1;
+  const canTransformSingleElement = selectedElementIds.length === 1 && !selectedElement?.locked;
   const activeElementInteraction =
     interaction?.mode === "move" || interaction?.mode === "resize" || interaction?.mode === "rotate"
       ? interaction
@@ -136,12 +164,38 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     return () => observer.disconnect();
   }, [deckSize.width]);
 
+  useEffect(() => {
+    setEditingElementId(null);
+  }, [slide.id]);
+
+  function commitTextEdit(elementId: string, value: string) {
+    updateElementById(slide.id, elementId, { content: value });
+    setEditingElementId(null);
+  }
+
+  function handleElementDoubleClick(element: SlideElement) {
+    if (element.locked) return;
+    selectElement(element.id);
+    setInteraction(null);
+    setPreviewPatches({});
+    if (element.type === "text") {
+      setEditingElementId(element.id);
+    } else if (element.type === "html" && element.codeConfig) {
+      setEditingCodeElement(element.id);
+    }
+  }
+
   function handleElementPointerDown(event: PointerEvent<HTMLDivElement>, element: SlideElement) {
     if (mode !== "editable" || element.locked) {
       return;
     }
 
     event.stopPropagation();
+    if (event.altKey) {
+      selectNextElementAtPoint(event, element);
+      return;
+    }
+
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       toggleElementSelection(element.id);
       setPreviewPatches({});
@@ -177,6 +231,67 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       startClientX: event.clientX,
       startClientY: event.clientY,
       startBounds: elementBounds(element),
+    });
+  }
+
+  function runCommand(command: EditorCommand) {
+    executeCommand(command);
+    setContextMenu(null);
+  }
+
+  function handleElementContextMenu(event: MouseEvent<HTMLDivElement>, element: SlideElement) {
+    if (mode !== "editable") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const elementIds = selectedElementIds.includes(element.id) ? selectedElementIds : [element.id];
+    if (!selectedElementIds.includes(element.id)) {
+      selectElement(element.id);
+    }
+
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "复制",
+          onSelect: () => runCommand({ type: "copy-elements", elementIds }),
+        },
+        {
+          label: "快速复制",
+          onSelect: () => runCommand({ type: "duplicate-elements", elementIds }),
+        },
+        {
+          label: "删除",
+          onSelect: () => runCommand({ type: "delete-elements", elementIds }),
+        },
+        {
+          label: element.locked ? "解锁" : "锁定",
+          onSelect: () => runCommand({ type: "toggle-locked", elementIds }),
+        },
+        {
+          label: element.hidden ? "显示" : "隐藏",
+          onSelect: () => runCommand({ type: "toggle-hidden", elementIds }),
+        },
+        {
+          label: "置顶",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "bring-to-front" }),
+        },
+        {
+          label: "上移一层",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "bring-forward" }),
+        },
+        {
+          label: "下移一层",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "send-backward" }),
+        },
+        {
+          label: "置底",
+          onSelect: () => runCommand({ type: "move-layer", elementIds, action: "send-to-back" }),
+        },
+      ],
     });
   }
 
@@ -253,11 +368,16 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     }
 
     if (interaction.mode === "move") {
-      const next = moveBounds(interaction.startBounds, {
+      const raw = moveBounds(interaction.startBounds, {
         x: (event.clientX - interaction.startClientX) / scale,
         y: (event.clientY - interaction.startClientY) / scale,
       });
-      setPreviewPatches({ [interaction.elementId]: next });
+      const otherBounds = renderElements
+        .filter((e) => e.id !== interaction.elementId)
+        .map(elementBounds);
+      const snapped = snapPosition(raw, otherBounds, deckSize, 6, showGrid ? 16 : null);
+      setSnapGuides(snapped.guides);
+      setPreviewPatches({ [interaction.elementId]: { ...raw, x: snapped.x, y: snapped.y } });
       return;
     }
 
@@ -266,12 +386,24 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
         x: (event.clientX - interaction.startClientX) / scale,
         y: (event.clientY - interaction.startClientY) / scale,
       };
+      const patches = Object.fromEntries(
+        Object.entries(interaction.startBoundsById).map(([id, bounds]) => [id, moveBounds(bounds, delta)]),
+      );
+      const movedArr = Object.values(patches);
+      const gx = Math.min(...movedArr.map((b) => b.x));
+      const gy = Math.min(...movedArr.map((b) => b.y));
+      const gw = Math.max(...movedArr.map((b) => b.x + b.w)) - gx;
+      const gh = Math.max(...movedArr.map((b) => b.y + b.h)) - gy;
+      const otherBounds = renderElements
+        .filter((e) => !selectedElementIds.includes(e.id))
+        .map(elementBounds);
+      const snapped = snapPosition({ x: gx, y: gy, w: gw, h: gh }, otherBounds, deckSize, 6, showGrid ? 16 : null);
+      const sdx = snapped.x - gx;
+      const sdy = snapped.y - gy;
+      setSnapGuides(snapped.guides);
       setPreviewPatches(
         Object.fromEntries(
-          Object.entries(interaction.startBoundsById).map(([elementId, bounds]) => [
-            elementId,
-            moveBounds(bounds, delta),
-          ]),
+          Object.entries(patches).map(([id, b]) => [id, { ...b, x: b.x + sdx, y: b.y + sdy }]),
         ),
       );
       return;
@@ -286,6 +418,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           y: (event.clientY - interaction.startClientY) / scale,
         },
         { w: interaction.minW, h: interaction.minH },
+        event.shiftKey,
       );
       setPreviewPatches({ [interaction.elementId]: next });
       return;
@@ -324,21 +457,24 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
 
   function commitInteraction() {
     if (interaction?.mode === "marquee") {
-      selectElements(elementIdsInMarquee(elements, interaction.currentBounds));
+      selectElements(elementIdsInMarquee(renderElements, interaction.currentBounds));
       setInteraction(null);
       setPreviewPatches({});
+      setSnapGuides([]);
       return;
     }
 
     if (!interaction || Object.keys(previewPatches).length === 0) {
       setInteraction(null);
       setPreviewPatches({});
+      setSnapGuides([]);
       return;
     }
 
     updateElementsById(slide.id, previewPatches);
     setInteraction(null);
     setPreviewPatches({});
+    setSnapGuides([]);
   }
 
   function getCanvasPoint(event: PointerEvent<HTMLDivElement>) {
@@ -373,6 +509,41 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
     });
   }
 
+  function handleCanvasContextMenu(event: MouseEvent<HTMLDivElement>) {
+    if (mode !== "editable") {
+      return;
+    }
+
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: "粘贴",
+          disabled: clipboardElementIds.length === 0,
+          onSelect: () => runCommand({ type: "paste-elements" }),
+        },
+        {
+          label: "新建文本",
+          onSelect: () => { addTextElement(); setContextMenu(null); },
+        },
+        {
+          label: "新建矩形",
+          onSelect: () => { addShapeElement("rect"); setContextMenu(null); },
+        },
+        {
+          label: "新建椭圆",
+          onSelect: () => { addShapeElement("ellipse"); setContextMenu(null); },
+        },
+        {
+          label: "导入图片",
+          onSelect: () => { imageInputRef.current?.click(); setContextMenu(null); },
+        },
+      ],
+    });
+  }
+
   function startMultiMove(event: PointerEvent<HTMLElement>) {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -383,6 +554,53 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       startClientY: event.clientY,
       startBoundsById: selectedBoundsById(selectedElements),
     });
+  }
+
+  function selectNextElementAtPoint(
+    event: PointerEvent<HTMLDivElement>,
+    currentElement: SlideElement,
+  ) {
+    const point = getCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+
+    const candidates = [...renderElements]
+      .sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0))
+      .filter((element) => {
+        const bounds = elementBounds(element);
+        return (
+          point.x >= bounds.x &&
+          point.x <= bounds.x + bounds.w &&
+          point.y >= bounds.y &&
+          point.y <= bounds.y + bounds.h
+        );
+      });
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const currentIndex = candidates.findIndex((element) => element.id === currentElement.id);
+    const nextElement = candidates[(currentIndex + 1) % candidates.length] ?? candidates[0];
+    selectElement(nextElement.id);
+    setPreviewPatches({});
+    setInteraction(null);
+  }
+
+  function handleHideSelected() {
+    if (!selectedElementId || selectedElementIds.length !== 1) {
+      return;
+    }
+
+    toggleElementHidden(selectedElementId);
+  }
+
+  function handleToggleLockSelected() {
+    if (!selectedElementId || selectedElementIds.length !== 1) {
+      return;
+    }
+
+    toggleElementLocked(selectedElementId);
   }
 
   return (
@@ -397,6 +615,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
       onPointerMove={handlePointerMove}
       onPointerUp={commitInteraction}
       onPointerCancel={commitInteraction}
+      onContextMenu={handleCanvasContextMenu}
     >
       <div
         className="slide-coordinate-space"
@@ -406,7 +625,7 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
           transform: `scale(${scale})`,
         }}
       >
-        {elements.map((element) => {
+        {renderElements.map((element) => {
           const isInteracting = activeElementInteraction?.elementId === element.id;
           const adjustedElement =
             mode === "editable" && (isInteracting || previewPatches[element.id])
@@ -420,10 +639,38 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
               mode={mode}
               selected={mode === "editable" && selectedElementIds.includes(element.id)}
               onPointerDown={handleElementPointerDown}
+              onContextMenu={handleElementContextMenu}
+              onDoubleClick={handleElementDoubleClick}
             />
           );
         })}
-        {mode === "editable" && selectedElement && canTransformSingleElement ? (
+        {mode === "editable" && editingElementId ? (() => {
+          const el = elements.find((e) => e.id === editingElementId);
+          return el && el.type === "text" ? (
+            <TextEditOverlay
+              element={el}
+              onCommit={(value) => commitTextEdit(editingElementId, value)}
+            />
+          ) : null;
+        })() : null}
+        {mode === "editable" && editingCodeElement ? (() => {
+          const el = elements.find((e) => e.id === editingCodeElement);
+          return el && el.type === "html" && el.codeConfig ? (
+            <CodeEditModal
+              code={el.html}
+              language={el.codeConfig.language}
+              onSave={(code, language) => {
+                updateElementById(slide.id, editingCodeElement, {
+                  html: code,
+                  codeConfig: { ...el.codeConfig!, language },
+                });
+                setEditingCodeElement(null);
+              }}
+              onClose={() => setEditingCodeElement(null)}
+            />
+          ) : null;
+        })() : null}
+        {mode === "editable" && selectedElement && selectedElementVisible && canTransformSingleElement ? (
           <TransformBox
             element={
               activeElementInteraction?.elementId === selectedElement.id
@@ -443,6 +690,34 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             showRotation={false}
           />
         ) : null}
+        {mode === "editable" && previewSelectedFrame ? (
+          <div
+            className="selection-action-bar"
+            style={{
+              left: Math.max(8, previewSelectedFrame.x),
+              top: Math.max(8, previewSelectedFrame.y - 46),
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button type="button" onClick={duplicateSelectedElements}>
+              复制
+            </button>
+            <button type="button" onClick={deleteSelectedElements}>
+              删除
+            </button>
+            {selectedElementIds.length === 1 ? (
+              <>
+                <button type="button" onClick={handleToggleLockSelected}>
+                  {selectedElement?.locked ? "解锁" : "锁定"}
+                </button>
+                <button type="button" onClick={handleHideSelected}>
+                  隐藏
+                </button>
+              </>
+            ) : null}
+            <span>Alt+点击选择下层</span>
+          </div>
+        ) : null}
         {mode === "editable" && interaction?.mode === "marquee" ? (
           <div
             className="selection-marquee"
@@ -454,7 +729,41 @@ export function SlideCanvas({ slide, deckSize, mode }: SlideCanvasProps) {
             }}
           />
         ) : null}
+        {mode === "editable" && showGrid && (
+          <div className="canvas-grid" style={{ width: deckSize.width, height: deckSize.height }} />
+        )}
+        {mode === "editable" && snapGuides.map((g, i) =>
+          g.axis === "x"
+            ? <div key={`sg-x-${i}`} className="snap-guide snap-guide-x" style={{ left: g.position, height: deckSize.height }} />
+            : <div key={`sg-y-${i}`} className="snap-guide snap-guide-y" style={{ top: g.position, width: deckSize.width }} />,
+        )}
       </div>
+      {mode === "editable" && contextMenu ? (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept={imageAccept}
+        aria-label="选择图片文件"
+        tabIndex={-1}
+        className="visually-hidden"
+        onChange={async (event: ChangeEvent<HTMLInputElement>) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (!file) return;
+          try {
+            addImageElement(await fileToDataUrl(file), file.name);
+          } catch {
+            setError("导入图片失败。");
+          }
+        }}
+      />
     </div>
   );
 }
@@ -475,4 +784,61 @@ function normalizeMarqueeBounds(
     w: Math.abs(currentPoint.x - startPoint.x),
     h: Math.abs(currentPoint.y - startPoint.y),
   };
+}
+
+function TextEditOverlay({
+  element,
+  onCommit,
+}: {
+  element: Extract<SlideElement, { type: "text" }>;
+  onCommit: (value: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      defaultValue={element.content}
+      style={{
+        position: "absolute",
+        left: element.x,
+        top: element.y,
+        width: element.w,
+        height: element.h,
+        transform: `rotate(${element.rotation ?? 0}deg)`,
+        transformOrigin: "center center",
+        fontFamily: element.style.fontFamily,
+        fontSize: element.style.fontSize,
+        fontWeight: element.style.fontWeight as never,
+        fontStyle: element.style.fontStyle,
+        color: element.style.color,
+        lineHeight: element.style.lineHeight,
+        letterSpacing: element.style.letterSpacing,
+        textAlign: element.style.textAlign as never,
+        background: element.style.background ?? "transparent",
+        padding: element.style.padding,
+        borderRadius: element.style.borderRadius,
+        whiteSpace: "pre-wrap",
+        outline: "2px solid #0891b2",
+        resize: "none",
+        border: "none",
+        overflow: "hidden",
+        zIndex: 9000,
+        cursor: "text",
+        boxSizing: "border-box",
+      }}
+      onBlur={(e) => onCommit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onCommit(e.currentTarget.value);
+        }
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+    />
+  );
 }

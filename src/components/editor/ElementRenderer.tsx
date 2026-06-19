@@ -1,7 +1,8 @@
 "use client";
 
-import type { CSSProperties, PointerEvent } from "react";
+import { useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
 import type { SlideElement } from "@/core/schema/deck";
+import { renderCodeFallback, sanitizeHtml } from "@/core/render/safeHtml";
 import { elementBaseReactStyle, textReactStyle } from "@/core/style/css";
 
 type ElementRendererProps = {
@@ -9,10 +10,31 @@ type ElementRendererProps = {
   selected?: boolean;
   mode: "editable" | "thumbnail";
   onPointerDown?: (event: PointerEvent<HTMLDivElement>, element: SlideElement) => void;
+  onContextMenu?: (event: MouseEvent<HTMLDivElement>, element: SlideElement) => void;
+  onDoubleClick?: (element: SlideElement) => void;
 };
 
 function baseStyle(element: SlideElement): CSSProperties {
   return elementBaseReactStyle(element);
+}
+
+function CodeRenderer({ element }: { element: Extract<SlideElement, { type: "html" }> }) {
+  const [html, setHtml] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    const lang = element.codeConfig?.language ?? "plaintext";
+    const theme = element.codeConfig?.theme === "light" ? "github-light" : "github-dark";
+    import("shiki").then(({ createHighlighter }) =>
+      createHighlighter({ themes: [theme], langs: [lang] })
+    ).then((hl) => {
+      if (!cancelled) setHtml(hl.codeToHtml(element.html, { lang, theme }));
+    }).catch(() => {
+      if (!cancelled) setHtml(renderCodeFallback(element.html));
+    });
+    return () => { cancelled = true; };
+  }, [element.html, element.codeConfig?.language, element.codeConfig?.theme]);
+
+  return <div dangerouslySetInnerHTML={{ __html: html || renderCodeFallback(element.html) }} style={{ width: "100%", height: "100%", overflow: "hidden" }} />;
 }
 
 export function ElementRenderer({
@@ -20,6 +42,8 @@ export function ElementRenderer({
   selected = false,
   mode,
   onPointerDown,
+  onContextMenu,
+  onDoubleClick,
 }: ElementRendererProps) {
   const className = `slide-element ${selected ? "is-selected" : ""}`;
   const commonProps = {
@@ -30,31 +54,25 @@ export function ElementRenderer({
       mode === "editable"
         ? (event: PointerEvent<HTMLDivElement>) => onPointerDown?.(event, element)
         : undefined,
+    onContextMenu:
+      mode === "editable"
+        ? (event: MouseEvent<HTMLDivElement>) => onContextMenu?.(event, element)
+        : undefined,
+    onDoubleClick:
+      mode === "editable"
+        ? (event: MouseEvent<HTMLDivElement>) => { event.stopPropagation(); onDoubleClick?.(element); }
+        : undefined,
   };
 
   if (element.type === "text") {
-    return (
-      <div
-        {...commonProps}
-        style={textReactStyle(element)}
-      >
-        {element.content}
-      </div>
-    );
+    return <div {...commonProps} style={textReactStyle(element)}>{element.content}</div>;
   }
 
   if (element.type === "image") {
+    const c = element.style.clip;
+    const clipPath = c && (c.top || c.right || c.bottom || c.left) ? `inset(${c.top}% ${c.right}% ${c.bottom}% ${c.left}%)` : undefined;
     return (
-      <div
-        {...commonProps}
-        style={{
-          ...baseStyle(element),
-          background: element.style.background,
-          borderRadius: element.style.borderRadius,
-          boxShadow: element.style.shadow,
-          overflow: "hidden",
-        }}
-      >
+      <div {...commonProps} style={{ ...baseStyle(element), background: element.style.background, borderRadius: element.style.borderRadius, boxShadow: element.style.shadow, clipPath, overflow: "hidden" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={element.src} alt={element.alt ?? ""} style={{ objectFit: element.objectFit }} />
       </div>
@@ -63,27 +81,13 @@ export function ElementRenderer({
 
   if (element.type === "shape") {
     return (
-      <div
-        {...commonProps}
-        style={{
-          ...baseStyle(element),
-          background: element.style.fill,
-          border: element.style.stroke
-            ? `${element.style.strokeWidth ?? 1}px solid ${element.style.stroke}`
-            : undefined,
-          borderRadius:
-            element.shape === "ellipse" ? "9999px" : element.style.borderRadius,
-          boxShadow: element.style.shadow,
-        }}
-      />
+      <div {...commonProps} style={{ ...baseStyle(element), background: element.style.fill, border: element.style.stroke ? `${element.style.strokeWidth ?? 1}px solid ${element.style.stroke}` : undefined, borderRadius: element.shape === "ellipse" ? "9999px" : element.style.borderRadius, boxShadow: element.style.shadow }} />
     );
   }
 
-  return (
-    <div
-      {...commonProps}
-      style={baseStyle(element)}
-      dangerouslySetInnerHTML={{ __html: element.html }}
-    />
-  );
+  if (element.codeConfig) {
+    return <div {...commonProps} style={{ ...baseStyle(element), overflow: "hidden" }}><CodeRenderer element={element} /></div>;
+  }
+
+  return <div {...commonProps} style={baseStyle(element)} dangerouslySetInnerHTML={{ __html: element.trustedHtml ? element.html : sanitizeHtml(element.html) }} />;
 }

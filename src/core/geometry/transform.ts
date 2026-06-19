@@ -24,6 +24,7 @@ export function resizeBounds(
   handle: ResizeHandle,
   delta: { x: number; y: number },
   minimum: { w?: number; h?: number } = {},
+  lockAspect = false,
 ): Bounds {
   let next = { ...start };
 
@@ -44,6 +45,19 @@ export function resizeBounds(
 
   const minW = minimum.w ?? 24;
   const minH = minimum.h ?? 24;
+
+  if (lockAspect && (handle === "ne" || handle === "nw" || handle === "se" || handle === "sw")) {
+    const aspect = start.w / start.h;
+    const dw = Math.abs(next.w - start.w) / start.w;
+    const dh = Math.abs(next.h - start.h) / start.h;
+    if (dw >= dh) {
+      next.h = Math.max(minH, Math.round(next.w / aspect));
+      if (handle.includes("n")) next.y = start.y + start.h - next.h;
+    } else {
+      next.w = Math.max(minW, Math.round(next.h * aspect));
+      if (handle.includes("w")) next.x = start.x + start.w - next.w;
+    }
+  }
 
   if (next.w < minW) {
     if (handle.includes("w")) {
