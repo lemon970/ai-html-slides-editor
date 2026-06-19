@@ -1321,6 +1321,38 @@
 
 .source-html-export:hover { background: var(--c-accent-hover); }
 
+.source-html-mode-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.source-html-mode-btn.is-active {
+  background: var(--c-accent-dim);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.source-html-mode-btn:hover { border-color: var(--c-accent); color: var(--c-accent); }
+
+.inline-edit-overlay {
+  position: fixed;
+  z-index: 9999;
+  padding: 4px 6px;
+  border: 2px solid var(--c-accent);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--c-text);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: both;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(60, 55, 48, 0.18);
+}
+
 .source-html-notice {
   padding: 8px 18px;
   border-bottom: 1px solid #7f1d1d;

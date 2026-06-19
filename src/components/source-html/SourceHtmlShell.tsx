@@ -1,22 +1,94 @@
 "use client";
 
-import { useState } from "react";
-import { useSourceHtmlStore } from "@/store/useSourceHtmlStore";
+import { useEffect, useRef, useState } from "react";
+import { useSourceHtmlStore, notifyIframe, nextPatchId } from "@/store/useSourceHtmlStore";
 import { useDeckStore } from "@/store/useDeckStore";
-import { PROMPT_TO_JSON_SCHEMA } from "@/core/import/convertPrompts";
 import { SlideThumbList } from "./SlideThumbList";
 import { SourceHtmlPreview } from "./SourceHtmlPreview";
 import { TextEditPanel } from "./TextEditPanel";
 import { ThemeVarPanel } from "./ThemeVarPanel";
+import type { Patch } from "@/core/patches/patches";
+
+type ActiveEdit = {
+  uid: string | null;
+  htmlId: string | null;
+  path: { slideIdx: number; indices: number[] } | null;
+  text: string;
+  rect: { top: number; left: number; width: number; height: number };
+};
 
 export function SourceHtmlShell() {
   const fileName = useSourceHtmlStore((s) => s.fileName);
   const notice = useSourceHtmlStore((s) => s.notice);
   const serialize = useSourceHtmlStore((s) => s.serialize);
   const reset = useSourceHtmlStore((s) => s.reset);
+  const appendPatch = useSourceHtmlStore((s) => s.appendPatch);
   const setAppMode = useDeckStore((s) => s.setAppMode);
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const [copiedUpgrade, setCopiedUpgrade] = useState(false);
+
+  const [editMode, setEditMode] = useState<"preview" | "revise">("preview");
+  const [activeEdit, setActiveEdit] = useState<ActiveEdit | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    notifyIframe({ __sls: 1, type: "setEditMode", enabled: editMode === "revise" });
+    if (editMode === "preview") setActiveEdit(null);
+  }, [editMode]);
+
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      const d = e.data;
+      if (!d || d.__sls !== 1 || d.type !== "elementClicked") return;
+      const iframeEl = document.querySelector<HTMLIFrameElement>(".source-html-preview");
+      const fr = iframeEl?.getBoundingClientRect();
+      setActiveEdit({
+        uid: d.eid ?? null,
+        htmlId: d.htmlId ?? null,
+        path: d.path ?? null,
+        text: d.text ?? "",
+        rect: {
+          top: (fr?.top ?? 0) + d.rect.top,
+          left: (fr?.left ?? 0) + d.rect.left,
+          width: d.rect.width,
+          height: d.rect.height,
+        },
+      });
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  useEffect(() => {
+    if (activeEdit) textareaRef.current?.focus();
+  }, [activeEdit]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      if (e.key === "e" || e.key === "E") setEditMode((m) => (m === "preview" ? "revise" : "preview"));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function submitEdit(value: string) {
+    if (!activeEdit) return;
+    if (value !== activeEdit.text && (activeEdit.uid || activeEdit.path)) {
+      const patch: Patch = {
+        id: nextPatchId(),
+        type: "text",
+        target: {
+          uid: activeEdit.uid ?? "",
+          ...(activeEdit.htmlId ? { htmlId: activeEdit.htmlId } : {}),
+          ...(activeEdit.path ? { path: activeEdit.path } : {}),
+        },
+        value,
+      };
+      appendPatch(patch);
+      notifyIframe({ __sls: 1, type: "applyTextPatch", eid: activeEdit.uid, value });
+    }
+    setActiveEdit(null);
+  }
 
   function handleExport() {
     const html = serialize();
@@ -34,19 +106,19 @@ export function SourceHtmlShell() {
     }
   }
 
-  function copyUpgrade() {
-    const html = serialize();
-    navigator.clipboard.writeText(`${PROMPT_TO_JSON_SCHEMA}\n\n---\n以下是需要转换的 HTML 文件：\n\n${html}`);
-    setCopiedUpgrade(true);
-    setTimeout(() => setCopiedUpgrade(false), 2000);
-  }
-
   return (
     <main className="source-html-shell">
       <header className="source-html-topbar">
         <button type="button" className="source-html-back" onClick={handleBack}>← 返回</button>
         <span className="source-html-filename">{fileName}</span>
-        <button type="button" className="source-html-upgrade" onClick={() => setShowUpgrade(true)}>升级为完整编辑</button>
+        <button
+          type="button"
+          className={`source-html-mode-btn${editMode === "revise" ? " is-active" : ""}`}
+          onClick={() => setEditMode((m) => (m === "preview" ? "revise" : "preview"))}
+          title="切换预览/修订模式 (E)"
+        >
+          {editMode === "preview" ? "预览模式" : "修订模式"}
+        </button>
         <button type="button" className="source-html-export" onClick={handleExport}>导出 HTML</button>
       </header>
       {notice ? <div className="source-html-notice">{notice}</div> : null}
@@ -60,23 +132,23 @@ export function SourceHtmlShell() {
         </aside>
       </div>
 
-      {showUpgrade && (
-        <div className="prompt-modal-overlay" onClick={() => setShowUpgrade(false)}>
-          <div className="prompt-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="prompt-modal-header">
-              <span>升级为完整可编辑格式</span>
-              <button type="button" onClick={() => setShowUpgrade(false)}>✕</button>
-            </div>
-            <p className="prompt-modal-desc">
-              复制以下提示词，连同当前 HTML 文件一起发给 AI，
-              转换后重新导入即可获得完整拖拽、图层、属性编辑等能力。
-            </p>
-            <pre className="prompt-modal-code">{PROMPT_TO_JSON_SCHEMA}</pre>
-            <button type="button" className="import-btn-primary" onClick={copyUpgrade}>
-              {copiedUpgrade ? "已复制！" : "复制提示词"}
-            </button>
-          </div>
-        </div>
+      {activeEdit && (
+        <textarea
+          ref={textareaRef}
+          className="inline-edit-overlay"
+          defaultValue={activeEdit.text}
+          style={{
+            top: activeEdit.rect.top,
+            left: activeEdit.rect.left,
+            width: Math.max(activeEdit.rect.width, 160),
+            minHeight: Math.max(activeEdit.rect.height, 32),
+          }}
+          onBlur={(e) => submitEdit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { e.preventDefault(); setActiveEdit(null); }
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitEdit(e.currentTarget.value); }
+          }}
+        />
       )}
     </main>
   );
