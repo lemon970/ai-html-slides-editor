@@ -27,7 +27,7 @@ function injectListener(html: string): string {
 var __editMode=false;
 var TT={H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,P:1,LI:1,SPAN:1,A:1,BUTTON:1,TD:1,TH:1};
 var EX={SCRIPT:1,STYLE:1,SVG:1,CANVAS:1,IMG:1,INPUT:1,TEXTAREA:1,VIDEO:1,SELECT:1};
-function isTextTarget(el){var t=el&&el.tagName;if(!t||EX[t])return false;if(TT[t])return true;if(t==='DIV'){var ns=el.childNodes;for(var i=0;i<ns.length;i++)if(ns[i].nodeType===3&&ns[i].textContent.trim())return true;}return false;}
+function isTextTarget(el){var t=el&&el.tagName;if(!t||EX[t])return false;if(TT[t])return!!el.textContent.trim();if(t==='DIV'){var ns=el.childNodes;for(var i=0;i<ns.length;i++)if(ns[i].nodeType===3&&ns[i].textContent.trim())return true;}return false;}
 function buildPath(el){var slides=document.querySelectorAll('section.slide,.slide,[data-slide],section');var si=-1,se=null;for(var i=0;i<slides.length;i++){if(slides[i].contains(el)){si=i;se=slides[i];break;}}if(si===-1)return null;var idx=[],node=el;while(node!==se){var p=node.parentElement;if(!p)return null;idx.unshift(Array.prototype.indexOf.call(p.children,node));node=p;}return{slideIdx:si,indices:idx};}
 window.addEventListener('message',function(e){
   var d=e.data;if(!d||d.__sls!==1||typeof d.type!=='string')return;
