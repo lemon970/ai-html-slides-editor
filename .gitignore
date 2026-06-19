@@ -17,5 +17,6 @@ downloaded/
 .cursor/
 .claude/
 对话历史.jsonl
+rollout-*.jsonl
 .next-dev.log
 .next-dev.err.log
