@@ -55,6 +55,7 @@ window.addEventListener('message',function(e){
   if(d.type==='setEditMode'){__editMode=!!d.enabled;return;}
   if(d.type==='applyTextPatch'){var el=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(el)el.textContent=d.value;return;}
   if(d.type==='applyImgPatch'){var il=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(il)il.setAttribute('src',d.value);return;}
+  if(d.type==='applyHidePatch'){var hl=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(hl)hl.style.setProperty('display','none','important');return;}
   if(d.type==='updateVar'){if(typeof d.name!=='string'||!/^--[a-z][a-z0-9-]*$/.test(d.name)||typeof d.value!=='string')return;document.documentElement.style.setProperty(d.name,d.value);return;}
 });
 document.addEventListener('click',function(e){
@@ -91,10 +92,12 @@ type SourceHtmlStore = {
   currentIndex: number;
   cssVars: Record<string, string>;
   patches: Patch[];
+  frameKey: number;
   load: (html: string, fileName: string, notice?: string | null) => void;
   loadFromDraft: (draft: SourceDraft) => void;
   setCurrentIndex: (i: number) => void;
   appendPatch: (patch: Patch) => void;
+  removePatch: (id: string) => void;
   updateText: (slideIndex: number, pathIndices: number[], value: string) => void;
   updateCssVar: (name: string, value: string) => void;
   serialize: () => string;
@@ -113,6 +116,7 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
   currentIndex: 0,
   cssVars: {},
   patches: [],
+  frameKey: 0,
 
   load: (html, fileName, notice = null) => {
     const session = buildSessionState(html);
@@ -131,6 +135,11 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
 
   appendPatch: (patch) => {
     set((s) => ({ patches: [...s.patches, patch] }));
+    scheduleAutoSave();
+  },
+
+  removePatch: (id) => {
+    set((s) => ({ patches: s.patches.filter((p) => p.id !== id), frameKey: s.frameKey + 1 }));
     scheduleAutoSave();
   },
 
@@ -173,12 +182,14 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
         notifyIframe({ __sls: 1, type: "applyTextPatch", eid: p.target.uid, value: p.value });
       if (p.type === "imgSrc" && p.target.uid)
         notifyIframe({ __sls: 1, type: "applyImgPatch", eid: p.target.uid, value: p.value });
+      if (p.type === "hide" && p.target.uid)
+        notifyIframe({ __sls: 1, type: "applyHidePatch", eid: p.target.uid });
     }
   },
 
   reset: () => {
     if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     _patchCounter = 0;
-    set({ draftId: "", fileName: "", notice: null, sourceHtml: "", injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {}, patches: [] });
+    set({ draftId: "", fileName: "", notice: null, sourceHtml: "", injectedHtml: "", doc: null, slideElements: [], currentIndex: 0, cssVars: {}, patches: [], frameKey: 0 });
   },
 }));

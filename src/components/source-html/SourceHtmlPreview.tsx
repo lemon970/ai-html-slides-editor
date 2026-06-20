@@ -7,6 +7,7 @@ export function SourceHtmlPreview() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const injectedHtml = useSourceHtmlStore((s) => s.injectedHtml);
   const currentIndex = useSourceHtmlStore((s) => s.currentIndex);
+  const frameKey = useSourceHtmlStore((s) => s.frameKey);
 
   useEffect(() => {
     registerIframeNotify((msg) => {
@@ -27,6 +28,7 @@ export function SourceHtmlPreview() {
 
   return (
     <iframe
+      key={frameKey}
       ref={iframeRef}
       className="source-html-preview"
       srcDoc={injectedHtml}

@@ -10,8 +10,9 @@ export type PatchTarget = {
 
 export type TextPatch = { id: string; type: "text"; target: PatchTarget; value: string };
 export type ImgSrcPatch = { id: string; type: "imgSrc"; target: PatchTarget; value: string };
+export type HidePatch = { id: string; type: "hide"; target: PatchTarget; label?: string };
 
-export type Patch = TextPatch | ImgSrcPatch;
+export type Patch = TextPatch | ImgSrcPatch | HidePatch;
 
 export type StaleInfo = { id: string; reason: string };
 
@@ -57,6 +58,7 @@ export function applyPatches(
     if (!el) { stale.push({ id: patch.id, reason: "target not found" }); continue; }
     if (patch.type === "text") el.textContent = patch.value;
     if (patch.type === "imgSrc") el.setAttribute("src", patch.value);
+    if (patch.type === "hide") (el as HTMLElement).style.setProperty("display", "none", "important");
   }
 
   doc.querySelectorAll("[data-eid]").forEach((el) => el.removeAttribute("data-eid"));

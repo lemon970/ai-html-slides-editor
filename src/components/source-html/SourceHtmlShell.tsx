@@ -7,19 +7,17 @@ import { SlideThumbList } from "./SlideThumbList";
 import { SourceHtmlPreview } from "./SourceHtmlPreview";
 import { TextEditPanel } from "./TextEditPanel";
 import { ThemeVarPanel } from "./ThemeVarPanel";
-import type { Patch } from "@/core/patches/patches";
+import type { HidePatch, Patch } from "@/core/patches/patches";
 
 type ActiveEdit = {
-  uid: string | null;
-  htmlId: string | null;
+  uid: string | null; htmlId: string | null;
   path: { slideIdx: number; indices: number[] } | null;
-  text: string;
+  text: string; tag: string;
   rect: { top: number; left: number; width: number; height: number };
 };
 
 type ImageEdit = {
-  uid: string | null;
-  htmlId: string | null;
+  uid: string | null; htmlId: string | null;
   path: { slideIdx: number; indices: number[] } | null;
   rect: { top: number; left: number; width: number; height: number };
 };
@@ -27,9 +25,11 @@ type ImageEdit = {
 export function SourceHtmlShell() {
   const fileName = useSourceHtmlStore((s) => s.fileName);
   const notice = useSourceHtmlStore((s) => s.notice);
+  const patches = useSourceHtmlStore((s) => s.patches);
   const serialize = useSourceHtmlStore((s) => s.serialize);
   const reset = useSourceHtmlStore((s) => s.reset);
   const appendPatch = useSourceHtmlStore((s) => s.appendPatch);
+  const removePatch = useSourceHtmlStore((s) => s.removePatch);
   const setAppMode = useDeckStore((s) => s.setAppMode);
 
   const [editMode, setEditMode] = useState<"preview" | "revise">("preview");
@@ -46,13 +46,9 @@ export function SourceHtmlShell() {
     function handleMessage(e: MessageEvent) {
       const d = e.data;
       if (!d || d.__sls !== 1) return;
-      const iframeEl = document.querySelector<HTMLIFrameElement>(".source-html-preview");
-      const fr = iframeEl?.getBoundingClientRect();
+      const fr = document.querySelector<HTMLIFrameElement>(".source-html-preview")?.getBoundingClientRect();
       const toScreen = (r: { top: number; left: number; width: number; height: number }) => ({
-        top: (fr?.top ?? 0) + r.top,
-        left: (fr?.left ?? 0) + r.left,
-        width: r.width,
-        height: r.height,
+        top: (fr?.top ?? 0) + r.top, left: (fr?.left ?? 0) + r.left, width: r.width, height: r.height,
       });
       if (d.type === "imageClicked") {
         setActiveEdit(null);
@@ -61,16 +57,14 @@ export function SourceHtmlShell() {
       }
       if (d.type === "elementClicked") {
         setImageEdit(null);
-        setActiveEdit({ uid: d.eid ?? null, htmlId: d.htmlId ?? null, path: d.path ?? null, text: d.text ?? "", rect: toScreen(d.rect) });
+        setActiveEdit({ uid: d.eid ?? null, htmlId: d.htmlId ?? null, path: d.path ?? null, text: d.text ?? "", tag: d.tag ?? "", rect: toScreen(d.rect) });
       }
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  useEffect(() => {
-    if (activeEdit) textareaRef.current?.focus();
-  }, [activeEdit]);
+  useEffect(() => { if (activeEdit) textareaRef.current?.focus(); }, [activeEdit]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -86,20 +80,28 @@ export function SourceHtmlShell() {
   function submitEdit(value: string) {
     if (!activeEdit) return;
     if (value !== activeEdit.text && (activeEdit.uid || activeEdit.path)) {
-      const patch: Patch = {
-        id: nextPatchId(),
-        type: "text",
-        target: {
-          uid: activeEdit.uid ?? "",
-          ...(activeEdit.htmlId ? { htmlId: activeEdit.htmlId } : {}),
-          ...(activeEdit.path ? { path: activeEdit.path } : {}),
-        },
-        value,
-      };
+      const patch: Patch = { id: nextPatchId(), type: "text", target: { uid: activeEdit.uid ?? "", ...(activeEdit.htmlId ? { htmlId: activeEdit.htmlId } : {}), ...(activeEdit.path ? { path: activeEdit.path } : {}) }, value };
       appendPatch(patch);
       notifyIframe({ __sls: 1, type: "applyTextPatch", eid: activeEdit.uid, value });
     }
     setActiveEdit(null);
+  }
+
+  function hideActiveEdit() {
+    if (!activeEdit?.uid) return;
+    const label = `${activeEdit.tag || "el"}: ${activeEdit.text.slice(0, 30)}`;
+    const patch: HidePatch = { id: nextPatchId(), type: "hide", target: { uid: activeEdit.uid, ...(activeEdit.path ? { path: activeEdit.path } : {}) }, label };
+    appendPatch(patch);
+    notifyIframe({ __sls: 1, type: "applyHidePatch", eid: activeEdit.uid });
+    setActiveEdit(null);
+  }
+
+  function hideImageEdit() {
+    if (!imageEdit?.uid) return;
+    const patch: HidePatch = { id: nextPatchId(), type: "hide", target: { uid: imageEdit.uid, ...(imageEdit.path ? { path: imageEdit.path } : {}) }, label: "img" };
+    appendPatch(patch);
+    notifyIframe({ __sls: 1, type: "applyHidePatch", eid: imageEdit.uid });
+    setImageEdit(null);
   }
 
   function handleImgFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -109,16 +111,7 @@ export function SourceHtmlShell() {
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
       if (!dataUrl || !dataUrl.startsWith("data:")) return;
-      const patch: Patch = {
-        id: nextPatchId(),
-        type: "imgSrc",
-        target: {
-          uid: imageEdit.uid ?? "",
-          ...(imageEdit.htmlId ? { htmlId: imageEdit.htmlId } : {}),
-          ...(imageEdit.path ? { path: imageEdit.path } : {}),
-        },
-        value: dataUrl,
-      };
+      const patch: Patch = { id: nextPatchId(), type: "imgSrc", target: { uid: imageEdit.uid ?? "", ...(imageEdit.htmlId ? { htmlId: imageEdit.htmlId } : {}), ...(imageEdit.path ? { path: imageEdit.path } : {}) }, value: dataUrl };
       appendPatch(patch);
       notifyIframe({ __sls: 1, type: "applyImgPatch", eid: imageEdit.uid, value: dataUrl });
       setImageEdit(null);
@@ -137,23 +130,17 @@ export function SourceHtmlShell() {
   }
 
   function handleBack() {
-    if (confirm("返回将丢失未导出的修改，确认吗？")) {
-      reset();
-      setAppMode("idle");
-    }
+    if (confirm("返回将丢失未导出的修改，确认吗？")) { reset(); setAppMode("idle"); }
   }
+
+  const hiddenPatches = patches.filter((p): p is HidePatch => p.type === "hide");
 
   return (
     <main className="source-html-shell">
       <header className="source-html-topbar">
         <button type="button" className="source-html-back" onClick={handleBack}>← 返回</button>
         <span className="source-html-filename">{fileName}</span>
-        <button
-          type="button"
-          className={`source-html-mode-btn${editMode === "revise" ? " is-active" : ""}`}
-          onClick={() => setEditMode((m) => (m === "preview" ? "revise" : "preview"))}
-          title="切换预览/修订模式 (E)"
-        >
+        <button type="button" className={`source-html-mode-btn${editMode === "revise" ? " is-active" : ""}`} onClick={() => setEditMode((m) => (m === "preview" ? "revise" : "preview"))} title="切换预览/修订模式 (E)">
           {editMode === "preview" ? "预览模式" : "修订模式"}
         </button>
         <button type="button" className="source-html-export" onClick={handleExport}>导出 HTML</button>
@@ -166,37 +153,46 @@ export function SourceHtmlShell() {
           <div className="panel-heading">文本编辑</div>
           <TextEditPanel />
           <ThemeVarPanel />
+          {hiddenPatches.length > 0 && (
+            <div className="hidden-items-section">
+              <div className="panel-heading">已隐藏 ({hiddenPatches.length})</div>
+              {hiddenPatches.map((p) => (
+                <div key={p.id} className="hidden-item-row">
+                  <span className="hidden-item-label">{p.label ?? p.id}</span>
+                  <button type="button" className="hidden-item-restore" onClick={() => removePatch(p.id)}>恢复</button>
+                </div>
+              ))}
+            </div>
+          )}
         </aside>
       </div>
 
       {activeEdit && (
-        <textarea
-          ref={textareaRef}
-          className="inline-edit-overlay"
-          defaultValue={activeEdit.text}
-          style={{
-            top: activeEdit.rect.top,
-            left: activeEdit.rect.left,
-            width: Math.max(activeEdit.rect.width, 160),
-            minHeight: Math.max(activeEdit.rect.height, 32),
-          }}
-          onBlur={(e) => submitEdit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { e.preventDefault(); setActiveEdit(null); }
-            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitEdit(e.currentTarget.value); }
-          }}
-        />
+        <>
+          <div className="text-edit-toolbar" style={{ position: "fixed", zIndex: 10000, top: activeEdit.rect.top - 28, left: activeEdit.rect.left }}>
+            <button type="button" className="hide-element-btn" onClick={hideActiveEdit}>隐藏</button>
+          </div>
+          <textarea
+            ref={textareaRef}
+            className="inline-edit-overlay"
+            defaultValue={activeEdit.text}
+            style={{ top: activeEdit.rect.top, left: activeEdit.rect.left, width: Math.max(activeEdit.rect.width, 160), minHeight: Math.max(activeEdit.rect.height, 32) }}
+            onBlur={(e) => submitEdit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { e.preventDefault(); setActiveEdit(null); }
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitEdit(e.currentTarget.value); }
+            }}
+          />
+        </>
       )}
 
       {imageEdit && (
-        <div
-          className="img-replace-overlay"
-          style={{ top: imageEdit.rect.top, left: imageEdit.rect.left }}
-        >
+        <div className="img-replace-overlay" style={{ top: imageEdit.rect.top, left: imageEdit.rect.left }}>
           <label className="img-replace-btn">
             选择图片
             <input type="file" accept="image/*" className="visually-hidden" onChange={handleImgFileChange} />
           </label>
+          <button type="button" className="hide-element-btn" onClick={hideImageEdit}>隐藏</button>
           <button type="button" className="img-replace-cancel" onClick={() => setImageEdit(null)}>取消</button>
         </div>
       )}

@@ -62,15 +62,15 @@ describe("annotateUids", () => {
 
 // ── applyPatches ──────────────────────────────────────────────────────────────
 
-describe("applyPatches", () => {
-  function getUidFor(selector: string): string {
-    const doc = parse(SLIDES_HTML);
-    annotateUids(detectSlides(doc));
-    const uid = doc.querySelector(selector)?.getAttribute("data-eid");
-    if (!uid) throw new Error(`no uid for ${selector}`);
-    return uid;
-  }
+function getUidFor(selector: string): string {
+  const doc = parse(SLIDES_HTML);
+  annotateUids(detectSlides(doc));
+  const uid = doc.querySelector(selector)?.getAttribute("data-eid");
+  if (!uid) throw new Error(`no uid for ${selector}`);
+  return uid;
+}
 
+describe("applyPatches", () => {
   it("applies text patch by uid", () => {
     const uid = getUidFor("section.slide h1");
     const { html, stale } = applyPatches(SLIDES_HTML, [
@@ -166,6 +166,41 @@ describe("annotateUids — images", () => {
     const uid1 = getImgUid(IMG_HTML);
     const uid2 = getImgUid(IMG_HTML);
     expect(uid1).toBe(uid2);
+  });
+});
+
+describe("applyPatches — hide", () => {
+  it("hides element with display:none !important", () => {
+    const uid = getUidFor("section.slide h1");
+    const { html, stale } = applyPatches(SLIDES_HTML, [
+      { id: "h1", type: "hide", target: { uid } },
+    ]);
+    expect(stale).toHaveLength(0);
+    expect(html).toContain("display: none");
+  });
+
+  it("hide stale when target not found", () => {
+    const { stale } = applyPatches(SLIDES_HTML, [
+      { id: "h2", type: "hide", target: { uid: "exxxxxx" } },
+    ]);
+    expect(stale).toHaveLength(1);
+  });
+
+  it("exported html has no data-eid after hide patch", () => {
+    const uid = getUidFor("section.slide h1");
+    const { html } = applyPatches(SLIDES_HTML, [
+      { id: "h3", type: "hide", target: { uid } },
+    ]);
+    expect(html).not.toContain("data-eid");
+  });
+
+  it("hide does not affect other elements", () => {
+    const uid = getUidFor("section.slide:first-child h1");
+    const { html } = applyPatches(SLIDES_HTML, [
+      { id: "h4", type: "hide", target: { uid } },
+    ]);
+    expect(html).toContain("Body text");
+    expect(html).toContain("Title Two");
   });
 });
 
