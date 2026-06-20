@@ -69,6 +69,10 @@ export function SourceHtmlShell() {
   useEffect(() => { if (activeEdit) textareaRef.current?.focus(); }, [activeEdit]);
 
   useEffect(() => {
+    notifyIframe({ __sls: 1, type: "setScrollLock", locked: !!(activeEdit || imageEdit) });
+  }, [activeEdit, imageEdit]);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") { setActiveEdit(null); setImageEdit(null); setPreflight(null); }
       const tag = (e.target as HTMLElement)?.tagName;

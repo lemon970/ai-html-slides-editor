@@ -56,6 +56,7 @@ window.addEventListener('message',function(e){
   if(d.type==='applyTextPatch'){var el=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(el)el.textContent=d.value;return;}
   if(d.type==='applyImgPatch'){var il=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(il)il.setAttribute('src',d.value);return;}
   if(d.type==='applyHidePatch'){var hl=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(hl)hl.style.setProperty('display','none','important');return;}
+  if(d.type==='setScrollLock'){document.body.style.overflow=d.locked?'hidden':'';return;}
   if(d.type==='updateVar'){if(typeof d.name!=='string'||!/^--[a-z][a-z0-9-]*$/.test(d.name)||typeof d.value!=='string')return;document.documentElement.style.setProperty(d.name,d.value);return;}
 });
 document.addEventListener('click',function(e){
