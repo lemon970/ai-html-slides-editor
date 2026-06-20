@@ -5,8 +5,6 @@ import { useSourceHtmlStore, notifyIframe, nextPatchId } from "@/store/useSource
 import { useDeckStore } from "@/store/useDeckStore";
 import { SlideThumbList } from "./SlideThumbList";
 import { SourceHtmlPreview } from "./SourceHtmlPreview";
-import { TextEditPanel } from "./TextEditPanel";
-import { ThemeVarPanel } from "./ThemeVarPanel";
 import { runPreflight, type PreflightResult } from "@/core/export/sourcePreflight";
 import type { HidePatch, Patch } from "@/core/patches/patches";
 
@@ -159,9 +157,7 @@ export function SourceHtmlShell() {
         <SlideThumbList />
         <SourceHtmlPreview />
         <aside className="source-html-sidebar">
-          <div className="panel-heading">文本编辑</div>
-          <TextEditPanel />
-          <ThemeVarPanel />
+          <div className="panel-hint">开启修订模式后，点击文字直接编辑。</div>
           {hiddenPatches.length > 0 && (
             <div className="hidden-items-section">
               <div className="panel-heading">已隐藏 ({hiddenPatches.length})</div>

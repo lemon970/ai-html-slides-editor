@@ -3,7 +3,6 @@
 import { useRef, useState, useEffect, type DragEvent, type ChangeEvent } from "react";
 import { detectEditorMode } from "@/core/import/detectSourceHtmlMode";
 import { parseConstrainedHtml } from "@/core/import/parseConstrainedHtml";
-import { PROMPT_TO_JSON_SCHEMA, PROMPT_TO_SOURCE_HTML } from "@/core/import/convertPrompts";
 import { deckSchema } from "@/core/schema/deck";
 import { loadDraft, clearDraft, type DraftPayload } from "@/core/persistence/draft";
 import { listSourceDrafts, loadSourceDraft, deleteSourceDraft, type SourceDraftMeta } from "@/core/persistence/sourceDraft";
@@ -62,10 +61,6 @@ export function ImportLanding() {
   const [dragging, setDragging] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [pending, setPending] = useState<{ html: string; name: string } | null>(null);
-  const [showConvert, setShowConvert] = useState(false);
-  const [convertTab, setConvertTab] = useState<"json" | "source">("json");
-  const [copiedConvert, setCopiedConvert] = useState(false);
   const [draft, setDraft] = useState<DraftPayload | null>(null);
   const [sourceDrafts, setSourceDrafts] = useState<SourceDraftMeta[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
@@ -92,17 +87,9 @@ export function ImportLanding() {
       loadSource(html, fileName);
       setAppMode("source-html");
     } else {
-      setPending({ html, name: fileName });
-      setShowConvert(true);
+      loadSource(html, fileName, "未识别到 slide 结构，已以预览模式打开");
+      setAppMode("source-html");
     }
-  }
-
-  function copyConvert() {
-    const prompt = convertTab === "json" ? PROMPT_TO_JSON_SCHEMA : PROMPT_TO_SOURCE_HTML;
-    const text = pending ? `${prompt}\n\n---\n以下是需要转换的 HTML 文件：\n\n${pending.html}` : prompt;
-    navigator.clipboard.writeText(text);
-    setCopiedConvert(true);
-    setTimeout(() => setCopiedConvert(false), 2000);
   }
 
   async function handleFile(file: File) {
@@ -251,55 +238,6 @@ export function ImportLanding() {
           </div>
         )}
 
-        {showConvert && pending && (
-          <div className="prompt-modal-overlay" onClick={() => setShowConvert(false)}>
-            <div className="prompt-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="prompt-modal-header">
-                <span>格式不匹配 — 用 AI 转换后重新导入</span>
-                <button type="button" onClick={() => setShowConvert(false)}>✕</button>
-              </div>
-              <p className="prompt-modal-desc">
-                此文件格式无法直接完整编辑。复制提示词，连同原 HTML 一起发给 AI，
-                转换后重新导入即可获得完整拖拽、图层等编辑能力。
-              </p>
-              <div className="convert-tabs">
-                <button
-                  type="button"
-                  className={`convert-tab${convertTab === "json" ? " active" : ""}`}
-                  onClick={() => setConvertTab("json")}
-                >
-                  转为 JSON Schema（完整编辑）
-                </button>
-                <button
-                  type="button"
-                  className={`convert-tab${convertTab === "source" ? " active" : ""}`}
-                  onClick={() => setConvertTab("source")}
-                >
-                  转为 Source HTML（保留特效）
-                </button>
-              </div>
-              <pre className="prompt-modal-code">
-                {convertTab === "json" ? PROMPT_TO_JSON_SCHEMA : PROMPT_TO_SOURCE_HTML}
-              </pre>
-              <div className="convert-actions">
-                <button type="button" className="import-btn-primary" onClick={copyConvert}>
-                  {copiedConvert ? "已复制！" : "复制提示词"}
-                </button>
-                <button
-                  type="button"
-                  className="import-btn-secondary"
-                  onClick={() => {
-                    loadSource(pending.html, pending.name);
-                    setAppMode("source-html");
-                    setShowConvert(false);
-                  }}
-                >
-                  先以预览模式打开
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
