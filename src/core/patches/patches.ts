@@ -49,7 +49,7 @@ export function applyPatches(
 ): { html: string; stale: StaleInfo[] } {
   const doc = new DOMParser().parseFromString(sourceHtml, "text/html");
   const slides = detectSlides(doc);
-  annotateUids(slides);
+  annotateUids(slides.length > 0 ? slides : (doc.body ? [doc.body] : []));
 
   const stale: StaleInfo[] = [];
 

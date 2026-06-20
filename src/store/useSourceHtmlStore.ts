@@ -45,7 +45,7 @@ function parseCssColorVars(html: string): Record<string, string> {
 function injectListener(html: string): string {
   const script = `<script data-editor-injected="1">(function(){
 var __editMode=false;
-var TT={H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,P:1,LI:1,SPAN:1,A:1,BUTTON:1,TD:1,TH:1};
+var TT={H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,P:1,LI:1,SPAN:1,A:1,BUTTON:1,TD:1,TH:1,CODE:1,PRE:1};
 var EX={SCRIPT:1,STYLE:1,SVG:1,CANVAS:1,IMG:1,INPUT:1,TEXTAREA:1,VIDEO:1,SELECT:1};
 function isTextTarget(el){var t=el&&el.tagName;if(!t||EX[t])return false;if(TT[t])return!!el.textContent.trim();if(t==='DIV'){var ns=el.childNodes;for(var i=0;i<ns.length;i++)if(ns[i].nodeType===3&&ns[i].textContent.trim())return true;}return false;}
 function buildPath(el){var slides=document.querySelectorAll('section.slide,.slide,[data-slide],section');var si=-1,se=null;for(var i=0;i<slides.length;i++){if(slides[i].contains(el)){si=i;se=slides[i];break;}}if(si===-1)return null;var idx=[],node=el;while(node!==se){var p=node.parentElement;if(!p)return null;idx.unshift(Array.prototype.indexOf.call(p.children,node));node=p;}return{slideIdx:si,indices:idx};}
@@ -75,7 +75,7 @@ function buildSessionState(html: string) {
   const doc =
     typeof window !== "undefined" ? new DOMParser().parseFromString(html, "text/html") : null;
   const slideElements = doc ? detectSlides(doc) : [];
-  if (doc) annotateUids(slideElements);
+  if (doc) annotateUids(slideElements.length > 0 ? slideElements : (doc.body ? [doc.body] : []));
   const cssVars = parseCssColorVars(html);
   const annotatedHtml = doc ? "<!DOCTYPE html>\n" + doc.documentElement.outerHTML : html;
   return { doc, slideElements, cssVars, injectedHtml: injectListener(annotatedHtml) };
@@ -125,6 +125,10 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
 
   loadFromDraft: (draft) => {
     const session = buildSessionState(draft.sourceHtml);
+    _patchCounter = draft.patches.reduce((m, p) => {
+      const n = parseInt(p.id.slice(1), 36);
+      return Number.isFinite(n) ? Math.max(m, n) : m;
+    }, 0);
     set({ draftId: draft.id, fileName: draft.title, notice: null, sourceHtml: draft.sourceHtml, patches: draft.patches, currentIndex: 0, ...session });
   },
 

@@ -34,4 +34,8 @@ describe("isTextTarget", () => {
     el.appendChild(span);
     expect(isTextTarget(el)).toBe(false);
   });
+
+  it("code with text → true", () => expect(isTextTarget(make("code", "const x = 1"))).toBe(true));
+  it("pre with text → true", () => expect(isTextTarget(make("pre", "line1\nline2"))).toBe(true));
+  it("empty code → false", () => expect(isTextTarget(make("code"))).toBe(false));
 });

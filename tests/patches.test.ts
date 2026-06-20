@@ -204,6 +204,36 @@ describe("applyPatches — hide", () => {
   });
 });
 
+describe("applyPatches — no-structure HTML (body as virtual slide)", () => {
+  const NO_SLIDE_HTML = `<!DOCTYPE html><html><body><h1>Title</h1><p>Body</p></body></html>`;
+
+  it("text patch resolves on no-structure HTML via uid", () => {
+    const doc = new DOMParser().parseFromString(NO_SLIDE_HTML, "text/html");
+    const body = doc.body;
+    annotateUids([body]);
+    const uid = doc.querySelector("h1")?.getAttribute("data-eid");
+    if (!uid) throw new Error("no uid on h1");
+    const { html, stale } = applyPatches(NO_SLIDE_HTML, [
+      { id: "p1", type: "text", target: { uid }, value: "Changed" },
+    ]);
+    expect(stale).toHaveLength(0);
+    expect(html).toContain("Changed");
+    expect(html).not.toContain("data-eid");
+  });
+
+  it("hide patch resolves on no-structure HTML via uid", () => {
+    const doc = new DOMParser().parseFromString(NO_SLIDE_HTML, "text/html");
+    annotateUids([doc.body]);
+    const uid = doc.querySelector("h1")?.getAttribute("data-eid");
+    if (!uid) throw new Error("no uid on h1");
+    const { html, stale } = applyPatches(NO_SLIDE_HTML, [
+      { id: "h1", type: "hide", target: { uid } },
+    ]);
+    expect(stale).toHaveLength(0);
+    expect(html).toContain("display: none");
+  });
+});
+
 describe("applyPatches — imgSrc", () => {
   it("replaces img src", () => {
     const uid = getImgUid(IMG_HTML);

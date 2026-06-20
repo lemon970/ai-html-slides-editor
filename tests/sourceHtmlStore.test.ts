@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useSourceHtmlStore } from "@/store/useSourceHtmlStore";
+import { useSourceHtmlStore, nextPatchId } from "@/store/useSourceHtmlStore";
 import { annotateUids, detectSlides } from "@/core/annotation/uidAnnotation";
 
 const SIMPLE_HTML = `<!DOCTYPE html><html><body>
@@ -64,5 +64,28 @@ describe("Step C: export cleanup integration", () => {
     const html = store.serialize();
     expect(html).not.toContain("data-editor-injected");
     expect(html).not.toContain("__editMode");
+  });
+});
+
+describe("loadFromDraft — patch counter sync", () => {
+  beforeEach(() => useSourceHtmlStore.getState().reset());
+
+  it("nextPatchId after loadFromDraft does not collide with restored patch ids", () => {
+    const store = useSourceHtmlStore.getState();
+    const uid = getUid(SIMPLE_HTML, "section.slide h1");
+    store.loadFromDraft({
+      id: "draft-1",
+      title: "test.html",
+      sourceHtml: SIMPLE_HTML,
+      patches: [
+        { id: "p1", type: "text", target: { uid }, value: "A" },
+        { id: "p2", type: "text", target: { uid }, value: "B" },
+      ],
+      savedAt: new Date().toISOString(),
+    });
+    const newId = nextPatchId();
+    expect(newId).not.toBe("p1");
+    expect(newId).not.toBe("p2");
+    expect(store.patches.every((p) => p.id !== newId)).toBe(true);
   });
 });
