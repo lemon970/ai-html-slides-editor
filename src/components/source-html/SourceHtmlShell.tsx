@@ -7,6 +7,7 @@ import { SlideThumbList } from "./SlideThumbList";
 import { SourceHtmlPreview } from "./SourceHtmlPreview";
 import { TextEditPanel } from "./TextEditPanel";
 import { ThemeVarPanel } from "./ThemeVarPanel";
+import { runPreflight, type PreflightResult } from "@/core/export/sourcePreflight";
 import type { HidePatch, Patch } from "@/core/patches/patches";
 
 type ActiveEdit = {
@@ -22,11 +23,13 @@ type ImageEdit = {
   rect: { top: number; left: number; width: number; height: number };
 };
 
+const LEVEL_ICON: Record<string, string> = { error: "✕", warning: "⚠", info: "ℹ" };
+
 export function SourceHtmlShell() {
   const fileName = useSourceHtmlStore((s) => s.fileName);
   const notice = useSourceHtmlStore((s) => s.notice);
   const patches = useSourceHtmlStore((s) => s.patches);
-  const serialize = useSourceHtmlStore((s) => s.serialize);
+  const sourceHtml = useSourceHtmlStore((s) => s.sourceHtml);
   const reset = useSourceHtmlStore((s) => s.reset);
   const appendPatch = useSourceHtmlStore((s) => s.appendPatch);
   const removePatch = useSourceHtmlStore((s) => s.removePatch);
@@ -35,6 +38,7 @@ export function SourceHtmlShell() {
   const [editMode, setEditMode] = useState<"preview" | "revise">("preview");
   const [activeEdit, setActiveEdit] = useState<ActiveEdit | null>(null);
   const [imageEdit, setImageEdit] = useState<ImageEdit | null>(null);
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -68,7 +72,7 @@ export function SourceHtmlShell() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { setActiveEdit(null); setImageEdit(null); }
+      if (e.key === "Escape") { setActiveEdit(null); setImageEdit(null); setPreflight(null); }
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === "e" || e.key === "E") setEditMode((m) => (m === "preview" ? "revise" : "preview"));
@@ -120,13 +124,18 @@ export function SourceHtmlShell() {
     e.target.value = "";
   }
 
-  function handleExport() {
-    const html = serialize();
+  function handleExportClick() {
+    setPreflight(runPreflight(sourceHtml, patches));
+  }
+
+  function confirmExport() {
+    if (!preflight) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    a.href = URL.createObjectURL(new Blob([preflight.html], { type: "text/html" }));
     a.download = fileName || "slides.html";
     a.click();
     URL.revokeObjectURL(a.href);
+    setPreflight(null);
   }
 
   function handleBack() {
@@ -143,7 +152,7 @@ export function SourceHtmlShell() {
         <button type="button" className={`source-html-mode-btn${editMode === "revise" ? " is-active" : ""}`} onClick={() => setEditMode((m) => (m === "preview" ? "revise" : "preview"))} title="切换预览/修订模式 (E)">
           {editMode === "preview" ? "预览模式" : "修订模式"}
         </button>
-        <button type="button" className="source-html-export" onClick={handleExport}>导出 HTML</button>
+        <button type="button" className="source-html-export" onClick={handleExportClick}>导出 HTML</button>
       </header>
       {notice ? <div className="source-html-notice">{notice}</div> : null}
       <div className="source-html-workspace">
@@ -172,17 +181,13 @@ export function SourceHtmlShell() {
           <div className="text-edit-toolbar" style={{ position: "fixed", zIndex: 10000, top: activeEdit.rect.top - 28, left: activeEdit.rect.left }}>
             <button type="button" className="hide-element-btn" onClick={hideActiveEdit}>隐藏</button>
           </div>
-          <textarea
-            ref={textareaRef}
-            className="inline-edit-overlay"
-            defaultValue={activeEdit.text}
+          <textarea ref={textareaRef} className="inline-edit-overlay" defaultValue={activeEdit.text}
             style={{ top: activeEdit.rect.top, left: activeEdit.rect.left, width: Math.max(activeEdit.rect.width, 160), minHeight: Math.max(activeEdit.rect.height, 32) }}
             onBlur={(e) => submitEdit(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") { e.preventDefault(); setActiveEdit(null); }
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitEdit(e.currentTarget.value); }
-            }}
-          />
+            }} />
         </>
       )}
 
@@ -194,6 +199,35 @@ export function SourceHtmlShell() {
           </label>
           <button type="button" className="hide-element-btn" onClick={hideImageEdit}>隐藏</button>
           <button type="button" className="img-replace-cancel" onClick={() => setImageEdit(null)}>取消</button>
+        </div>
+      )}
+
+      {preflight && (
+        <div className="preflight-backdrop" onClick={() => setPreflight(null)}>
+          <div className="preflight-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="preflight-header">
+              <span>导出检查</span>
+              <button type="button" onClick={() => setPreflight(null)}>✕</button>
+            </div>
+            <div className="preflight-body">
+              {preflight.items.length === 0 ? (
+                <div className="preflight-ok">✓ 未发现风险，可安全导出</div>
+              ) : (
+                preflight.items.map((item, i) => (
+                  <div key={i} className={`preflight-item preflight-${item.level}`}>
+                    <span className="preflight-icon">{LEVEL_ICON[item.level]}</span>
+                    {item.message}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="preflight-footer">
+              <button type="button" className="source-html-mode-btn" onClick={() => setPreflight(null)}>取消</button>
+              <button type="button" className="source-html-export" disabled={preflight.hasError} onClick={confirmExport}>
+                {preflight.hasError ? "有错误，无法导出" : preflight.hasWarning ? "忽略警告并导出" : "确认导出"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

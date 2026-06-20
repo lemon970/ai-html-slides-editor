@@ -1636,6 +1636,41 @@
 .src-draft-open { padding: 4px 12px; font-size: 12px; }
 .src-draft-del { padding: 4px 10px; font-size: 12px; }
 
+/* ── Preflight Modal ─────────────────────────── */
+.preflight-backdrop {
+  position: fixed; inset: 0; z-index: 9990;
+  background: rgba(30, 27, 24, 0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.preflight-modal {
+  width: 480px; max-width: 95vw;
+  background: var(--c-bg); border: 1px solid var(--c-border);
+  border-radius: 12px; overflow: hidden;
+  box-shadow: var(--shadow-menu);
+}
+.preflight-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--c-border);
+  font-weight: 700; font-size: 14px;
+}
+.preflight-header button { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--c-text-2); }
+.preflight-body { padding: 16px 18px; max-height: 300px; overflow-y: auto; }
+.preflight-ok { color: var(--c-accent); font-size: 13px; font-weight: 600; }
+.preflight-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;
+  font-size: 12px; line-height: 1.5;
+}
+.preflight-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; font-weight: 700; }
+.preflight-error  { background: var(--c-danger-dim); color: var(--c-danger); }
+.preflight-warning { background: #fef9ec; color: #92660d; }
+.preflight-info   { background: var(--c-accent-dim); color: var(--c-accent); }
+.preflight-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--c-border);
+}
+.preflight-footer button:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ============ Presentation Mode ============ */
 .presentation-overlay {
   position: fixed;
