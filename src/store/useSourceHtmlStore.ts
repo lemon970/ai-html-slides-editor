@@ -54,13 +54,16 @@ window.addEventListener('message',function(e){
   if(d.type==='navigate'){var i=Number(d.index);if(!Number.isFinite(i)||i<0)return;var ss=document.querySelectorAll('section.slide,.slide,[data-slide]');var n=ss.length;if(!n)return;if(window.__goTo){window.__goTo(i);}else{var dk=document.getElementById('deck')||ss[0]&&ss[0].parentElement;if(dk)dk.style.transform='translateX('+(-(i*100/n))+'%)';}window.__currentSlideIndex=i;return;}
   if(d.type==='setEditMode'){__editMode=!!d.enabled;return;}
   if(d.type==='applyTextPatch'){var el=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(el)el.textContent=d.value;return;}
+  if(d.type==='applyImgPatch'){var il=d.eid?document.querySelector('[data-eid="'+d.eid+'"]'):null;if(il)il.setAttribute('src',d.value);return;}
   if(d.type==='updateVar'){if(typeof d.name!=='string'||!/^--[a-z][a-z0-9-]*$/.test(d.name)||typeof d.value!=='string')return;document.documentElement.style.setProperty(d.name,d.value);return;}
 });
 document.addEventListener('click',function(e){
   if(!__editMode)return;
-  var el=e.target;if(!el||!isTextTarget(el))return;
-  e.preventDefault();e.stopImmediatePropagation();
+  var el=e.target;if(!el)return;
   var path=buildPath(el);var r=el.getBoundingClientRect();
+  if(el.tagName==='IMG'){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({__sls:1,type:'imageClicked',eid:el.getAttribute('data-eid')||null,htmlId:el.id||null,path:path,rect:{top:r.top,left:r.left,width:r.width,height:r.height}},'*');return;}
+  if(!isTextTarget(el))return;
+  e.preventDefault();e.stopImmediatePropagation();
   window.parent.postMessage({__sls:1,type:'elementClicked',eid:el.getAttribute('data-eid')||null,htmlId:el.id||null,tag:el.tagName.toLowerCase(),text:el.textContent||'',path:path,rect:{top:r.top,left:r.left,width:r.width,height:r.height}},'*');
 },true);
 })();<\/script>`;
@@ -168,6 +171,8 @@ export const useSourceHtmlStore = create<SourceHtmlStore>()((set, get) => ({
     for (const p of get().patches) {
       if (p.type === "text" && p.target.uid)
         notifyIframe({ __sls: 1, type: "applyTextPatch", eid: p.target.uid, value: p.value });
+      if (p.type === "imgSrc" && p.target.uid)
+        notifyIframe({ __sls: 1, type: "applyImgPatch", eid: p.target.uid, value: p.value });
     }
   },
 

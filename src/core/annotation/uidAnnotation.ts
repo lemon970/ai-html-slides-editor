@@ -32,9 +32,28 @@ function walkAnnotate(el: Element, slideIdx: number, path: number[]): void {
   });
 }
 
+function buildPathFromSlide(el: Element, slideRoot: Element): number[] {
+  const indices: number[] = [];
+  let node: Element = el;
+  while (node !== slideRoot) {
+    const parent = node.parentElement;
+    if (!parent) return [];
+    indices.unshift(Array.from(parent.children).indexOf(node));
+    node = parent;
+  }
+  return indices;
+}
+
 export function annotateUids(slideElements: Element[]): void {
   slideElements.forEach((slide, slideIdx) => {
     [...slide.children].forEach((child, i) => walkAnnotate(child, slideIdx, [i]));
+    slide.querySelectorAll("img").forEach((img) => {
+      if (!img.getAttribute("data-eid")) {
+        const path = buildPathFromSlide(img, slide);
+        const src = img.getAttribute("src")?.slice(-20) ?? "";
+        img.setAttribute("data-eid", computeUid(slideIdx, path, "img", src));
+      }
+    });
   });
 }
 

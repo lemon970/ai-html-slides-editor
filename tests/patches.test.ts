@@ -48,13 +48,13 @@ describe("annotateUids", () => {
     expect(uid1).toBe(uid2);
   });
 
-  it("does not annotate script/style/img elements", () => {
+  it("does not annotate script/style elements; does annotate img", () => {
     const doc = parse(`<!DOCTYPE html><html><body>
       <section class="slide">
         <h1>Hi</h1><img src="x.png"/><script>alert(1)</script>
       </section></body></html>`);
     annotateUids(detectSlides(doc));
-    expect(doc.querySelector("img")?.getAttribute("data-eid")).toBeNull();
+    expect(doc.querySelector("img")?.getAttribute("data-eid")).toBeTruthy();
     expect(doc.querySelector("script")?.getAttribute("data-eid")).toBeNull();
     expect(doc.querySelector("h1")?.getAttribute("data-eid")).toBeTruthy();
   });
@@ -137,5 +137,61 @@ describe("applyPatches", () => {
     expect(stale).toHaveLength(0);
     expect(html).toContain("Slide 1");
     expect(html).toContain("Slide 2");
+  });
+});
+
+const IMG_HTML = `<!DOCTYPE html><html><body>
+<section class="slide">
+  <h1>Title</h1>
+  <img src="original.png" alt="test"/>
+</section>
+</body></html>`;
+
+function getImgUid(html: string): string {
+  const doc = parse(html);
+  annotateUids(detectSlides(doc));
+  const uid = doc.querySelector("img")?.getAttribute("data-eid");
+  if (!uid) throw new Error("no img uid");
+  return uid;
+}
+
+describe("annotateUids — images", () => {
+  it("annotates img elements with data-eid", () => {
+    const doc = parse(IMG_HTML);
+    annotateUids(detectSlides(doc));
+    expect(doc.querySelector("img")?.getAttribute("data-eid")).toBeTruthy();
+  });
+
+  it("img uid is deterministic across parses", () => {
+    const uid1 = getImgUid(IMG_HTML);
+    const uid2 = getImgUid(IMG_HTML);
+    expect(uid1).toBe(uid2);
+  });
+});
+
+describe("applyPatches — imgSrc", () => {
+  it("replaces img src", () => {
+    const uid = getImgUid(IMG_HTML);
+    const { html, stale } = applyPatches(IMG_HTML, [
+      { id: "i1", type: "imgSrc", target: { uid }, value: "data:image/png;base64,abc" },
+    ]);
+    expect(stale).toHaveLength(0);
+    expect(html).toContain('src="data:image/png;base64,abc"');
+    expect(html).not.toContain("original.png");
+  });
+
+  it("imgSrc stale when target not found", () => {
+    const { stale } = applyPatches(IMG_HTML, [
+      { id: "i2", type: "imgSrc", target: { uid: "exxxxxx" }, value: "data:image/png;base64,x" },
+    ]);
+    expect(stale).toHaveLength(1);
+  });
+
+  it("exported html has no data-eid after imgSrc patch", () => {
+    const uid = getImgUid(IMG_HTML);
+    const { html } = applyPatches(IMG_HTML, [
+      { id: "i3", type: "imgSrc", target: { uid }, value: "data:image/png;base64,abc" },
+    ]);
+    expect(html).not.toContain("data-eid");
   });
 });

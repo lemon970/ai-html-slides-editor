@@ -17,6 +17,13 @@ type ActiveEdit = {
   rect: { top: number; left: number; width: number; height: number };
 };
 
+type ImageEdit = {
+  uid: string | null;
+  htmlId: string | null;
+  path: { slideIdx: number; indices: number[] } | null;
+  rect: { top: number; left: number; width: number; height: number };
+};
+
 export function SourceHtmlShell() {
   const fileName = useSourceHtmlStore((s) => s.fileName);
   const notice = useSourceHtmlStore((s) => s.notice);
@@ -27,31 +34,35 @@ export function SourceHtmlShell() {
 
   const [editMode, setEditMode] = useState<"preview" | "revise">("preview");
   const [activeEdit, setActiveEdit] = useState<ActiveEdit | null>(null);
+  const [imageEdit, setImageEdit] = useState<ImageEdit | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     notifyIframe({ __sls: 1, type: "setEditMode", enabled: editMode === "revise" });
-    if (editMode === "preview") setActiveEdit(null);
+    if (editMode === "preview") { setActiveEdit(null); setImageEdit(null); }
   }, [editMode]);
 
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
       const d = e.data;
-      if (!d || d.__sls !== 1 || d.type !== "elementClicked") return;
+      if (!d || d.__sls !== 1) return;
       const iframeEl = document.querySelector<HTMLIFrameElement>(".source-html-preview");
       const fr = iframeEl?.getBoundingClientRect();
-      setActiveEdit({
-        uid: d.eid ?? null,
-        htmlId: d.htmlId ?? null,
-        path: d.path ?? null,
-        text: d.text ?? "",
-        rect: {
-          top: (fr?.top ?? 0) + d.rect.top,
-          left: (fr?.left ?? 0) + d.rect.left,
-          width: d.rect.width,
-          height: d.rect.height,
-        },
+      const toScreen = (r: { top: number; left: number; width: number; height: number }) => ({
+        top: (fr?.top ?? 0) + r.top,
+        left: (fr?.left ?? 0) + r.left,
+        width: r.width,
+        height: r.height,
       });
+      if (d.type === "imageClicked") {
+        setActiveEdit(null);
+        setImageEdit({ uid: d.eid ?? null, htmlId: d.htmlId ?? null, path: d.path ?? null, rect: toScreen(d.rect) });
+        return;
+      }
+      if (d.type === "elementClicked") {
+        setImageEdit(null);
+        setActiveEdit({ uid: d.eid ?? null, htmlId: d.htmlId ?? null, path: d.path ?? null, text: d.text ?? "", rect: toScreen(d.rect) });
+      }
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
@@ -63,6 +74,7 @@ export function SourceHtmlShell() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") { setActiveEdit(null); setImageEdit(null); }
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === "e" || e.key === "E") setEditMode((m) => (m === "preview" ? "revise" : "preview"));
@@ -88,6 +100,31 @@ export function SourceHtmlShell() {
       notifyIframe({ __sls: 1, type: "applyTextPatch", eid: activeEdit.uid, value });
     }
     setActiveEdit(null);
+  }
+
+  function handleImgFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !imageEdit) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl || !dataUrl.startsWith("data:")) return;
+      const patch: Patch = {
+        id: nextPatchId(),
+        type: "imgSrc",
+        target: {
+          uid: imageEdit.uid ?? "",
+          ...(imageEdit.htmlId ? { htmlId: imageEdit.htmlId } : {}),
+          ...(imageEdit.path ? { path: imageEdit.path } : {}),
+        },
+        value: dataUrl,
+      };
+      appendPatch(patch);
+      notifyIframe({ __sls: 1, type: "applyImgPatch", eid: imageEdit.uid, value: dataUrl });
+      setImageEdit(null);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   }
 
   function handleExport() {
@@ -149,6 +186,19 @@ export function SourceHtmlShell() {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submitEdit(e.currentTarget.value); }
           }}
         />
+      )}
+
+      {imageEdit && (
+        <div
+          className="img-replace-overlay"
+          style={{ top: imageEdit.rect.top, left: imageEdit.rect.left }}
+        >
+          <label className="img-replace-btn">
+            选择图片
+            <input type="file" accept="image/*" className="visually-hidden" onChange={handleImgFileChange} />
+          </label>
+          <button type="button" className="img-replace-cancel" onClick={() => setImageEdit(null)}>取消</button>
+        </div>
       )}
     </main>
   );

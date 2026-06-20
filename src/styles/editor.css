@@ -1353,6 +1353,37 @@
   box-shadow: 0 4px 16px rgba(60, 55, 48, 0.18);
 }
 
+.img-replace-overlay {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border: 2px solid var(--c-accent);
+  border-radius: 8px;
+  background: var(--c-bg);
+  box-shadow: 0 4px 16px rgba(60, 55, 48, 0.18);
+}
+.img-replace-btn {
+  padding: 6px 14px;
+  background: var(--c-accent);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.img-replace-cancel {
+  padding: 6px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .source-html-notice {
   padding: 8px 18px;
   border-bottom: 1px solid #7f1d1d;
