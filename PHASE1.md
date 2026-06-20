@@ -49,3 +49,29 @@
 2. **可编辑区域提示** — 修订模式下高亮可点击元素，降低首次使用摸索成本
 3. **多样本保真回归测试** — 5 个 fixture HTML 的 patch 快照测试，防止 annotateUids / resolveTarget 回归
 4. **patch 冲突/失效恢复** — stale patch 提供"自动丢弃"或"手动确认"流程，而非仅在 preflight 时报错
+
+---
+
+## Bug Bash — Phase 1 稳定性修复
+
+**状态：Phase 1 stable baseline**  
+**日期：** 2026-06-20  
+**Commits：** `bd38817`（3 个 bug）、`fd02e54`（1 个 bug）  
+**测试：** 133 → 139 / 139，TypeScript 零报错
+
+### 已修复（4 个）
+
+| # | 级别 | 根因 | 修复位置 |
+|---|---|---|---|
+| B1 | P0 | 注入脚本 `TT` 缺 `CODE`/`PRE`，修订模式点击代码块静默失效。`isTextTarget.ts` 已修但运行时用的是 `injectListener` 里的 inline 副本 | `useSourceHtmlStore.ts` — `TT` 加 `CODE:1,PRE:1` |
+| B2 | P1 | `loadFromDraft` 不重置 `_patchCounter`，新增 patch ID 与草稿已有 patch（如 `p1`）冲突，`removePatch` 误删多条 | `useSourceHtmlStore.ts` — `loadFromDraft` 从现有 patches 计算最大 counter |
+| B3 | P1 | 无结构 HTML 时 `annotateUids([])` 空操作，元素无 `data-eid`；`submitEdit` / `hideActiveEdit` 检查 uid 为 null 提前返回，编辑和隐藏静默丢失（`PHASE1.md` 明确写"可编辑"） | `useSourceHtmlStore.ts` + `patches.ts` — 无 slides 时以 `body` 为 virtual slide-0 传入 `annotateUids` |
+| B4 | P1 | overlay 打开后用户继续滚动 iframe 内容，`position:fixed` 漂离元素（无结构长页尤为明显） | `useSourceHtmlStore.ts` 注入 `setScrollLock` handler；`SourceHtmlShell.tsx` overlay 出现/消失时发 postMessage 锁定/解锁 `body.overflow` |
+
+### 已知限制（P2，不影响正常使用）
+
+| 限制 | 说明 |
+|---|---|
+| `<pre>` 内嵌套 `<code>` 两者都响应点击 | 实际影响小，可观察 |
+| AI 提示词模板 HTML（含 `data-deck+data-slide+data-element`）走 json 路径后 fallback，显示"导入失败" notice | 需产品决策是否调整 `detectEditorMode` 优先级 |
+| `<br>` 换行在 inline 编辑提交后转为空格 | textarea 原生限制，需 Phase 2 引入 contenteditable 方案 |
