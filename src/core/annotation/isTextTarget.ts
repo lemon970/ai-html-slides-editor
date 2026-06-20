@@ -1,4 +1,4 @@
-const TEXT_TAGS = new Set(["H1","H2","H3","H4","H5","H6","P","LI","SPAN","A","BUTTON","TD","TH"]);
+const TEXT_TAGS = new Set(["H1","H2","H3","H4","H5","H6","P","LI","SPAN","A","BUTTON","TD","TH","CODE","PRE"]);
 const EXCL_TAGS = new Set(["SCRIPT","STYLE","SVG","CANVAS","IMG","INPUT","TEXTAREA","VIDEO","SELECT"]);
 
 export function isTextTarget(el: Element): boolean {

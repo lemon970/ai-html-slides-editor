@@ -1419,6 +1419,10 @@
   color: #fecaca;
   font-size: 13px;
 }
+.source-html-notice:empty {
+  padding: 0;
+  border-bottom: 0;
+}
 
 .source-html-workspace {
   display: grid;

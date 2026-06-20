@@ -152,7 +152,7 @@ export function SourceHtmlShell() {
         </button>
         <button type="button" className="source-html-export" onClick={handleExportClick}>导出 HTML</button>
       </header>
-      {notice ? <div className="source-html-notice">{notice}</div> : null}
+      <div className="source-html-notice">{notice}</div>
       <div className="source-html-workspace">
         <SlideThumbList />
         <SourceHtmlPreview />
